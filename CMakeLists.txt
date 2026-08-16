@@ -14,9 +14,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_executable(ThanLongItemConsolidator src/main.cpp)
-target_compile_definitions(ThanLongItemConsolidator PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+target_compile_definitions(ThanLongItemConsolidator PRIVATE _WIN32_WINNT=0x0A00)
 if(MSVC)
-    target_compile_options(ThanLongItemConsolidator PRIVATE /utf-8 /W4 /permissive-)
+    target_compile_options(ThanLongItemConsolidator PRIVATE
+        /utf-8
+        /W4
+        /permissive-
+        /FI"${CMAKE_CURRENT_SOURCE_DIR}/src/WinCompat.h"
+    )
 endif()
 target_link_libraries(ThanLongItemConsolidator PRIVATE user32 gdi32)
 
