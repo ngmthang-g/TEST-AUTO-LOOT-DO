@@ -1,190 +1,185 @@
-# RemoteLoot PoC v0.1.0
+# ThanLong Item Consolidator v0.1.0
 
-Mục tiêu duy nhất của repo này là **xác định server/client chấp nhận hành vi nhặt bọc nào khi nhân vật đứng xa**. Đây chưa phải Auto Loot hoàn chỉnh.
+Tool điều phối nhiều cửa sổ Thần Long để **dồn đồ từ acc con về một acc chính** bằng **auto-click nền thuần Win32**.
 
-## Trạng thái hiện tại
+## Nguyên tắc khóa của dự án
 
-- Source: `BUILD PASS`.
-- GitHub Actions Windows x64: `CI PASS` cho code commit `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e` (run #8 / `31941065682`).
-- Runtime game/server: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN` cho tới khi có test thật.
+- Chỉ `TESTauto-don-do-acc-chinh` là repo phát triển.
+- Repo `clinent-game-than-long-DATA-2222` chỉ dùng làm knowledge base/tra cứu hành vi game.
+- **Không inject DLL. Không hook GameAssembly. Không gọi Game/Lua API. Không gửi packet nội bộ.**
+- Action thực tế chỉ là click nền vào cửa sổ game bằng `WM_MOUSE...` (`PostMessage` hoặc `SendMessageTimeout`).
+- Tool không di chuyển con trỏ chuột thật.
+- Tọa độ macro dùng hệ 0..1, được scale lại theo kích thước client hiện tại ở **mỗi click**.
+- Tối đa 1 giao dịch đang hoạt động trong toàn bộ nhóm acc.
 
-## Căn cứ VERIFIED từ knowledge base
+## Luồng điều phối
 
-Client đã có semantic loot API:
+1. Tool quét các cửa sổ game đang hiển thị.
+2. Người dùng chọn 1 `MAIN` và 1..6 `CHILD`.
+3. Thứ tự acc con đã chọn chính là slot giao dịch 1..6.
+4. Tất cả acc có thể chạy macro `move_anchor` rồi `start_train`.
+5. Theo chu kỳ, tool mở/sắp xếp túi bằng macro và **scan hình ảnh 90 ô túi**.
+6. Khi một CHILD còn `<= 9` ô trống, acc đó được đưa vào hàng đợi dồn đồ.
+7. Chỉ một CHILD được xử lý tại một thời điểm:
+   - MAIN + CHILD dừng train;
+   - cả hai chạy macro `move_anchor` về cùng tọa độ train cố định;
+   - MAIN chạy `trade_invite_N` đúng slot của CHILD;
+   - CHILD đồng ý;
+   - CHILD chạy macro đưa đồ + xác nhận;
+   - MAIN chạy macro nhận/xác nhận;
+   - tool chờ rồi scan lại túi.
+8. Nếu MAIN còn `< 9` ô trống, MAIN ưu tiên chạy `sell_main`, scan lại, quay về anchor rồi train tiếp.
+9. Acc con **không bao giờ chạy auto-sell**.
+10. Sau mỗi giao dịch mặc định scan lại toàn bộ acc để xếp hàng lại từ trạng thái mới.
 
-- `Game.GetNearestItemPack(...)` / `Game.GetNearbyItemPack(...)`
-- `Game.ClickToObject(RoleID)`
-- `Game.PickUpItemFromItemPack(itemPackID, slotIndex, UsingAuto)`
-- built-in pick-all: `Game.PickUpItemFromItemPack(itemPackID, -1, 1)`
-- built-in auto loot bình thường: nếu khoảng cách > 100 thì `MoveToEx(...)` rồi mới `ClickToObject(...)`
-- built-in auto pickup bị skip khi `Game.HasBuff(30008009)` và source hiển thị thông báo Càn Khôn Hồ.
+## Điểm quan trọng về `9 ô`
 
-Điểm **chưa VERIFIED** là server có chấp nhận direct pickup ở xa khi không có Càn Khôn Hồ hay không. PoC này tồn tại để trả lời đúng câu đó.
+Hai ngưỡng được tách riêng trong `config/tool.ini`:
 
-## Thiết kế PoC
+- `child_trigger_free_slots=9`: CHILD bắt đầu muốn dồn đồ khi `free <= 9`.
+- `main_stop_free_slots=9`: MAIN dừng nhận khi `free < 9` và chuyển sang bán.
+- `max_transfer_clicks_per_trade=9`: giới hạn số item-grid click trong một giao dịch; runtime còn tự giảm tiếp theo dung lượng MAIN để tránh nhét mù quá số ô còn trống.
 
-PoC gồm 2 file x64:
+Điều này bám đúng yêu cầu “acc con còn khoảng 9 ô thì giao dịch” và “acc chính còn trống dưới 9 ô thì dừng”. Có thể đổi độc lập.
 
-- `RemoteLootProbe.exe` — controller console độc lập.
-- `RemoteLootBridge.dll` — `WH_GETMESSAGE` hook cực nhỏ chạy trên window thread của game và gọi IL2CPP semantic API.
+## Background click + tự scale
 
-Không có:
+Macro không lưu pixel tuyệt đối. Ví dụ click tại `0.80, 0.55` nghĩa là 80% chiều rộng và 55% chiều cao vùng client hiện tại. Vì vậy cùng một macro vẫn dùng được khi mỗi cửa sổ game có kích thước khác nhau, miễn layout UI giữ cùng tỷ lệ.
 
-- Auto Train.
-- Auto Sell.
-- vòng lặp auto loot.
-- OCR/pixel scan.
-- `MoveTo` / `MoveToEx` trong các test remote.
-- danh sách 90 action hoặc spam request.
+Hai mode:
 
-Mỗi lệnh mutable là **one-shot** do người test bấm tay.
+- `post`: `PostMessage` — bất đồng bộ, nhẹ hơn.
+- `send`: `SendMessageTimeout` — đồng bộ hơn, dùng khi client bỏ sót click `post`.
 
-> PoC gọi semantic action trực tiếp từ validated Unity `SynchronizationContext` hook để giảm biến số khi test server acceptance. Đây **không phải** kiến trúc action engine production cuối cùng. Nếu direct pickup PASS, bản tool thật phải quay về ActionGate/MainThread dispatcher + state proof chuẩn.
+Cả hai đều không dùng `SetCursorPos`, không dùng `SendInput`, không lấy chuột thật.
+
+> Rủi ro runtime cần test: một số Unity/InputSystem không nhận `WM_MOUSE...` như UI Win32 thông thường. Nếu client này không nhận background window message, phải chứng minh một đường click nền khác vẫn không chiếm chuột; không được âm thầm đổi sang `SendInput` vì sẽ phá yêu cầu.
+
+## Macro DSL
+
+Trong `macros/*.macro`:
+
+```text
+sleep <milliseconds>
+click <x> <y> [repeat=1] [interval_ms=120] [after_ms=0]
+grid <left> <top> <cols> <rows> <step_x> <step_y> <count> [interval_ms=120] [after_ms=0]
+```
+
+Ví dụ:
+
+```text
+click 0.82 0.91 1 120 400
+sleep 600
+grid 0.61 0.27 10 9 0.037 0.061 60 100 300
+```
+
+`grid` rất phù hợp cho thao tác click nhiều item trong túi hoặc chuỗi bán lặp lại. Số click, delay, repeat đều sửa trực tiếp được mà không cần build lại EXE.
+
+## Các macro bắt buộc
+
+- `start_train`
+- `stop_train`
+- `move_anchor`
+- `bag_open_sort`
+- `bag_close`
+- `trade_invite_1` ... `trade_invite_6`
+- `trade_accept_child`
+- `trade_give_items_child` — nên dùng lệnh `grid`; coordinator sẽ áp dynamic cap theo free slots của MAIN
+- `trade_confirm_child`
+- `trade_confirm_main`
+- `sell_main`
+- `revive_return`
+
+`revive_return.macro` đi cùng detector chết bằng visual signature; mặc định detector `enabled=0` cho tới khi capture một mẫu màn hình chết thật để tránh false positive. Khi match: recovery macro → move anchor → bật train → rescan.
+
+## Scan túi — pure visual
+
+Vì project không gọi nội bộ, v0.1.0 không dùng `Game.GetFreeBagSpace()` để điều khiển. Scanner làm như sau:
+
+1. `bag_open_sort` mở túi và sắp xếp.
+2. Capture client window bằng GDI/`PrintWindow`.
+3. Duyệt lưới `cols x rows` (mặc định 10x9 = 90 ô).
+4. So màu + variance vùng giữa từng slot với mẫu “ô trống” đã calibration.
+5. Nếu quá nhiều slot nằm sát threshold, kết quả bị đánh dấu `uncertain` và **không được dùng để ra quyết định giao dịch/bán**.
+
+### Calibration geometry
+
+Nếu chưa có `config/bag_geometry.txt`, tool có wizard setup một lần:
+
+- trỏ chuột vào tâm ô đầu tiên;
+- trỏ vào ô kế bên phải;
+- trỏ vào ô hàng dưới;
+- tool tự tính `grid_left/grid_top/step_x/step_y` theo hệ 0..1.
+
+Wizard chỉ dùng chuột lúc **setup**; runtime auto vẫn không chiếm chuột.
+
+Sau đó lần chạy đầu tool yêu cầu một ô `calibration_row/calibration_col` đang trống rồi tự lưu mẫu vào `config/bag_calibration.txt`.
+
+## Điều phối / chống đua trạng thái
+
+- `transactionMutex` khóa toàn bộ chuỗi trade/sell.
+- Acc con khác dù túi đầy vẫn tiếp tục train/chờ tới lượt.
+- Sau trade mặc định `rescan_all_after_trade=1`.
+- Queue chọn CHILD theo round-robin để tránh một acc luôn chen trước.
+- Nếu scan túi không chắc chắn, acc đó không được đưa vào giao dịch.
+- Nếu cửa sổ bị minimize/mất, automation dừng thay vì click vào HWND stale.
+- Số item click mỗi trade được giảm động theo dung lượng MAIN để giảm nguy cơ overflow trước lần rescan.
+
+## Auto chết / đầu thai / ra map
+
+Có visual death detector dùng một vùng UI nhỏ đã calibration. Khi phát hiện match:
+
+```text
+stop_train
+-> revive_return
+-> chờ recovery
+-> move_anchor
+-> start_train
+-> rescan all
+```
+
+Mặc định tắt vì repo hiện chưa có mẫu màn hình chết cụ thể. Bật trong `[death]` sau khi chọn vùng ổn định và capture mẫu thật.
 
 ## Build
 
-GitHub Actions tự build Windows x64 và upload artifact:
-
-`RemoteLootPoC-v0.1.0-win-x64`
-
-Artifact chứa:
-
-- `RemoteLootProbe.exe`
-- `RemoteLootBridge.dll`
-- `README.md`
-
-Build local:
+Windows x64 / C++20 / CMake:
 
 ```powershell
 cmake -S . -B build -A x64
 cmake --build build --config Release
 ```
 
-Sau build, để `RemoteLootProbe.exe` và `RemoteLootBridge.dll` cùng một thư mục.
+GitHub Actions tạo artifact:
 
-## Chạy
+`ThanLongItemConsolidator-v0.1.0-win-x64`
 
-1. Mở game và đăng nhập nhân vật.
-2. Chạy `RemoteLootProbe.exe` cùng mức quyền với game. Nếu game chạy Administrator thì probe cũng chạy Administrator.
-3. Chọn PID game.
-4. Probe tự chạy:
-   - `Validate Unity managed context`;
-   - `Resolve/print loot API signatures`.
-5. Tạo một bọc đồ trên đất và đứng **xa hơn khoảng nhặt bình thường**.
-6. Tắt Auto pickup của game.
-7. Test theo thứ tự bên dưới.
+Artifact gồm EXE, `config/`, `macros/`, README và tài liệu kiến trúc.
 
-## Test A — scanner
+## Trạng thái v0.1.0
 
-Menu `3`:
+### Đã code
 
-`Scan nearest ItemPack`
+- multi-window discovery;
+- chọn MAIN + 1..6 CHILD;
+- normalized background click tự scale;
+- macro engine có delay/repeat/grid-click;
+- visual bag scanner + calibration + uncertainty guard;
+- ngưỡng riêng MAIN/CHILD;
+- dynamic transfer cap theo free slots MAIN;
+- single-transaction mutex;
+- round-robin queue;
+- flow stop train -> move anchor -> trade -> rescan;
+- MAIN-only sell flow;
+- full rescan after every trade;
+- visual death detector + recovery path.
 
-Nếu method runtime đúng dạng PoC hỗ trợ, tool in `RoleID` của bọc gần nhất và giữ nó làm candidate `itemPackID`.
+### Chưa runtime-verified
 
-Nếu runtime signature khác, PoC **không đoán tham số**; log sẽ in exact signature và trả `SIGNATURE_UNSUPPORTED`.
+- client có nhận `PostMessage`/`SendMessageTimeout` ổn định hay không;
+- tọa độ UI thực tế cho từng macro;
+- geometry túi thực tế và threshold scan tối ưu;
+- chuỗi trade chính xác theo số popup/confirm của server hiện tại;
+- sell macro thực tế;
+- detector chết cần calibration mẫu hình thật; code path recovery đã có nhưng chưa runtime-verified.
 
-## Test B — remote ClickToObject
-
-Menu `4`:
-
-```text
-Game.ClickToObject(ItemPack.RoleID)
-```
-
-PoC tuyệt đối không gọi `MoveTo`/`MoveToEx` trước hoặc sau lệnh này.
-
-### PASS có ý nghĩa khi
-
-- nhân vật không chạy lại gần;
-- pack-content lifecycle hoặc pickup response xuất hiện;
-- game không disconnect/crash;
-- kết quả lặp lại được.
-
-### FAIL
-
-- không có phản ứng;
-- server từ chối;
-- chỉ hoạt động khi ở gần;
-- disconnect/crash/exception.
-
-Disconnect/crash **không tự động chứng minh server từ chối**; có thể là execution-boundary/re-entrancy failure. Log phải được giữ lại.
-
-## Test C — direct pickup all ở xa
-
-Menu `5`:
-
-```text
-Game.PickUpItemFromItemPack(itemPackID, -1, 1)
-```
-
-Không có movement call.
-
-PoC tự đọc `GetFreeBagSpace()` trước/sau và rescan pack làm bằng chứng phụ. Lưu ý: số ô trống không đổi **không đủ kết luận FAIL** nếu vật phẩm được cộng dồn vào stack đang có.
-
-### DIRECT REMOTE PICKUP = PASS chỉ khi
-
-Cùng một test condition cho thấy:
-
-- nhân vật vẫn đứng nguyên vị trí;
-- bọc mục tiêu biến mất hoặc contents của nó giảm đúng;
-- tay nải/item state thay đổi đúng;
-- không disconnect/crash;
-- có thể lặp lại ở nhiều bọc.
-
-Nếu PASS khi **buff 30008009 ABSENT**, giả thuyết mạnh nhất là khoảng cách >100 trong shipped Auto chỉ là client-side policy hoặc server cho phép semantic pickup từ xa trong phạm vi AOI.
-
-Nếu FAIL khi buff absent nhưng PASS khi buff present, server nhiều khả năng có entitlement/state check liên quan Càn Khôn Hồ.
-
-Nếu cả direct pickup lẫn ClickToObject đều không phải cơ chế khi buff present, cần chuyển sang nghiên cứu targeted subsystem của Càn Khôn Hồ; không broad reverse client.
-
-## Test D — Càn Khôn Hồ
-
-Menu `6` gọi:
-
-```text
-Game.HasBuff(30008009)
-```
-
-Chạy lại cùng test B/C ở hai trạng thái:
-
-1. `ABSENT`
-2. `PRESENT`
-
-Không thay đổi điều kiện khác nếu có thể.
-
-## Test E — ô trống tay nải
-
-Menu `7` gọi read-only:
-
-```text
-Game.GetFreeBagSpace()
-```
-
-Dùng để đối chiếu trước/sau pickup, không dùng một mình làm bằng chứng thành công/thất bại.
-
-## Bảng ghi kết quả cần gửi lại
-
-```text
-Game PID:
-ValidateContext: PASS/FAIL
-Loot API signatures:
-ScanNearestPack: PASS/FAIL
-Distance: gần / >100 / rất xa trong AOI
-Buff 30008009: ABSENT/PRESENT
-ClickToObject: PASS/FAIL + hiện tượng
-DirectPickupAll: PASS/FAIL + hiện tượng
-Nhân vật có di chuyển: YES/NO
-Pack biến mất: YES/NO
-Bag thay đổi: YES/NO
-Disconnect/crash: YES/NO
-Log detail:
-```
-
-## Evidence status v0.1.0
-
-- Source/CI: `BUILD PASS / CI PASS`.
-- Runtime: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN` cho tới khi có test thật.
-- Càn Khôn Hồ mechanism: `UNKNOWN`; buff 30008009 skip guard là VERIFIED, nhưng cơ chế nhặt riêng của nó chưa được chứng minh.
+Không được gọi các mục trên là PASS trước khi test thực tế.
