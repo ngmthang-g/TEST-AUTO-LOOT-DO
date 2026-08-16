@@ -14,13 +14,15 @@
 - Does NOT Prove: server accepts direct pickup at distance; Càn Khôn Hồ uses the same request path; RoleID always equals pickup itemPackID.
 - Confidence: CONFIRMED for the shipped-source facts above.
 
-## EVID-002 — Windows x64 source build
+## EVID-002 — Windows x64 final-code CI build
 - Type: CI
 - Date / Version: 2026-08-16 / v0.1.0
-- Observation: an earlier v0.1.0 code snapshot built successfully in GitHub Actions Windows x64.
-- Supports: the native controller/bridge source compiles under the intended toolchain.
-- Does NOT Prove: current/latest commit runtime behavior or game/server acceptance.
-- Confidence: CONFIRMED for that CI snapshot; latest code commit must also pass CI before delivery status is promoted.
+- Source commit: `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e`.
+- GitHub Actions: run #8 / run ID `31941065682`.
+- Observation: latest v0.1.0 code snapshot completed Windows x64 GitHub Actions with conclusion `success`.
+- Supports: final controller/bridge code compiles under the intended toolchain and the artifact packaging workflow succeeds.
+- Does NOT Prove: game runtime stability, method resolution on the target client, or server acceptance of distant pickup.
+- Confidence: CONFIRMED for BUILD/CI only.
 
 ## EVID-003 — Live remote-loot acceptance
 - Type: USER_RUNTIME
