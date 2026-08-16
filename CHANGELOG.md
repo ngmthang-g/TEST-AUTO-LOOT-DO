@@ -14,11 +14,15 @@
 - One-shot `ClickToObject(RoleID)` test with no PoC movement call.
 - One-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call.
 - `HasBuff(30008009)` Càn Khôn Hồ state probe.
+- `GetFreeBagSpace()` before/after auxiliary pickup proof plus nearest-pack rescan.
 - GitHub Actions Windows x64 build/artifact workflow.
 - Project knowledge and runtime test procedure.
 
 ### Build
-- CI: pending/follow-up until workflow result is recorded.
+- Final code commit tested by CI: `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e`.
+- GitHub Actions run: `#8` / run ID `31941065682`.
+- Final: `BUILD PASS` / `CI PASS` on Windows x64.
+- Artifact workflow packages `RemoteLootProbe.exe`, `RemoteLootBridge.dll`, and README.
 
 ### Runtime
 - Status: `RUNTIME UNTESTED`.
