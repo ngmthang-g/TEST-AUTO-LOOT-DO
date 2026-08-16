@@ -2,6 +2,13 @@
 
 Mục tiêu duy nhất của repo này là **xác định server/client chấp nhận hành vi nhặt bọc nào khi nhân vật đứng xa**. Đây chưa phải Auto Loot hoàn chỉnh.
 
+## Trạng thái hiện tại
+
+- Source: `BUILD PASS`.
+- GitHub Actions Windows x64: `CI PASS` cho code commit `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e` (run #8 / `31941065682`).
+- Runtime game/server: `RUNTIME UNTESTED`.
+- Direct remote pickup: `UNKNOWN` cho tới khi có test thật.
+
 ## Căn cứ VERIFIED từ knowledge base
 
 Client đã có semantic loot API:
@@ -40,6 +47,12 @@ Mỗi lệnh mutable là **one-shot** do người test bấm tay.
 GitHub Actions tự build Windows x64 và upload artifact:
 
 `RemoteLootPoC-v0.1.0-win-x64`
+
+Artifact chứa:
+
+- `RemoteLootProbe.exe`
+- `RemoteLootBridge.dll`
+- `README.md`
 
 Build local:
 
@@ -108,6 +121,8 @@ Game.PickUpItemFromItemPack(itemPackID, -1, 1)
 
 Không có movement call.
 
+PoC tự đọc `GetFreeBagSpace()` trước/sau và rescan pack làm bằng chứng phụ. Lưu ý: số ô trống không đổi **không đủ kết luận FAIL** nếu vật phẩm được cộng dồn vào stack đang có.
+
 ### DIRECT REMOTE PICKUP = PASS chỉ khi
 
 Cùng một test condition cho thấy:
@@ -139,6 +154,16 @@ Chạy lại cùng test B/C ở hai trạng thái:
 
 Không thay đổi điều kiện khác nếu có thể.
 
+## Test E — ô trống tay nải
+
+Menu `7` gọi read-only:
+
+```text
+Game.GetFreeBagSpace()
+```
+
+Dùng để đối chiếu trước/sau pickup, không dùng một mình làm bằng chứng thành công/thất bại.
+
 ## Bảng ghi kết quả cần gửi lại
 
 ```text
@@ -159,7 +184,7 @@ Log detail:
 
 ## Evidence status v0.1.0
 
-- Source/CI: đang kiểm tra.
+- Source/CI: `BUILD PASS / CI PASS`.
 - Runtime: `RUNTIME UNTESTED`.
 - Direct remote pickup: `UNKNOWN` cho tới khi có test thật.
 - Càn Khôn Hồ mechanism: `UNKNOWN`; buff 30008009 skip guard là VERIFIED, nhưng cơ chế nhặt riêng của nó chưa được chứng minh.
