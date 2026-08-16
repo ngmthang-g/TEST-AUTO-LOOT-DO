@@ -1,0 +1,5 @@
+# trade_give_items_child
+# IMPORTANT: use a grid line here after measuring the real trade item-grid.
+# The coordinator will cap emitted grid clicks dynamically from MAIN free slots.
+# Example only (commented):
+# grid 0.600000 0.300000 10 9 0.035000 0.055000 90 120 300
