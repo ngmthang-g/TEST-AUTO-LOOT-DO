@@ -156,7 +156,7 @@ public:
     }
 
     bool Send(Command command, std::int64_t a0 = 0, std::int64_t a1 = 0, std::int64_t a2 = 0,
-              DWORD timeoutMs = 4000) {
+              DWORD timeoutMs = 4000, bool print = true) {
         if (!shared_ || !hook_) return false;
         shared_->command = command;
         shared_->arg0 = a0;
@@ -177,16 +177,23 @@ public:
         while (GetTickCount64() < deadline) {
             if (shared_->responseSequence == seq) {
                 MemoryBarrier();
-                std::wcout << L"[" << ResultName(shared_->result) << L"] " << shared_->detail << L"\n";
+                if (print) std::wcout << L"[" << ResultName(shared_->result) << L"] " << shared_->detail << L"\n";
                 return true;
             }
             Sleep(10);
         }
-        std::wcerr << L"[TIMEOUT] Target thread did not answer within " << timeoutMs << L" ms\n";
+        if (print) std::wcerr << L"[TIMEOUT] Target thread did not answer within " << timeoutMs << L" ms\n";
         return false;
     }
 
     SharedBlock* Data() const { return shared_; }
+
+    bool ReadFreeBagSpace(std::int64_t& out, bool print = true) {
+        if (!Send(Command::GetFreeBagSpace, 0, 0, 0, 4000, print)) return false;
+        if (shared_->result != ResultCode::Ok) return false;
+        out = shared_->out0;
+        return true;
+    }
 
     void Close() {
         if (hook_) {
@@ -235,6 +242,7 @@ void PrintMenu(std::int64_t lastPack) {
                << L"4. TEST ClickToObject(RoleID) WITHOUT MoveTo/MoveToEx\n"
                << L"5. TEST PickUpItemFromItemPack(packID,-1,1) WITHOUT movement\n"
                << L"6. Check Càn Khôn Hồ buff 30008009 (read-only)\n"
+               << L"7. Read free bag space (read-only)\n"
                << L"0. Exit\n";
     if (lastPack) std::wcout << L"Last scanned candidate pack RoleID/itemPackID: " << lastPack << L"\n";
     std::wcout << L"> ";
@@ -295,13 +303,43 @@ int wmain() {
         } else if (choice == 5) {
             const auto packId = ReadId(L"itemPackID candidate", lastPack);
             if (packId) {
+                std::int64_t bagBefore = -1;
+                std::int64_t bagAfter = -1;
+                const bool haveBefore = session.ReadFreeBagSpace(bagBefore, true);
+
                 std::wcout << L"TEST condition: stand farther than normal pickup range, Auto pickup OFF.\n";
-                std::wcout << L"Observe whether the same pack disappears and whether the bag changes.\n";
-                session.Send(Command::DirectPickupAll, packId);
+                std::wcout << L"Observe whether the same pack disappears and whether the bag/items change.\n";
+                const bool invoked = session.Send(Command::DirectPickupAll, packId);
+
+                if (invoked) {
+                    Sleep(350);
+                    const bool haveAfter = session.ReadFreeBagSpace(bagAfter, true);
+                    if (haveBefore && haveAfter) {
+                        std::wcout << L"[PROOF-AUX] free bag space before=" << bagBefore << L", after=" << bagAfter
+                                   << L". Unchanged free slots does NOT prove failure if loot stacked into an existing slot.\n";
+                    }
+                    Sleep(150);
+                    if (session.Send(Command::ScanNearestPack, 0, 0, 0, 4000, false)) {
+                        if (session.Data()->result == ResultCode::Ok) {
+                            const auto afterPack = session.Data()->out0;
+                            std::wcout << L"[PROOF-AUX] nearest pack after action=" << afterPack;
+                            if (afterPack != packId) std::wcout << L" (target candidate is no longer nearest/same id)";
+                            std::wcout << L"\n";
+                        } else {
+                            std::wcout << L"[PROOF-AUX] nearest-pack rescan result=" << ResultName(session.Data()->result)
+                                       << L" | " << session.Data()->detail << L"\n";
+                        }
+                    }
+                }
             }
         } else if (choice == 6) {
             if (session.Send(Command::HasCanKhonHoBuff) && session.Data()->result == ResultCode::Ok) {
                 std::wcout << L"Buff 30008009 = " << (session.Data()->out0 ? L"PRESENT" : L"ABSENT") << L"\n";
+            }
+        } else if (choice == 7) {
+            std::int64_t freeSpace = -1;
+            if (session.ReadFreeBagSpace(freeSpace, true)) {
+                std::wcout << L"Free bag space = " << freeSpace << L"\n";
             }
         }
     }
