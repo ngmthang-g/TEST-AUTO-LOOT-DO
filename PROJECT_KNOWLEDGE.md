@@ -1,75 +1,90 @@
-# PROJECT KNOWLEDGE
+# PROJECT KNOWLEDGE — TESTauto-don-do-acc-chinh
 
 ## Project Identity
-- Name: RemoteLoot PoC
-- Repository: `ngmthang-g/TEST-AUTO-LOOT-DO`
-- Primary branch: `main`
-- Current version: `v0.1.0`
+- Name: ThanLong Item Consolidator
+- Repository: `ngmthang-g/TESTauto-don-do-acc-chinh`
+- Branch under development: `agent/item-consolidator-v0.1`
+- Version: `v0.1.0`
 - Platform: Windows x64, native C++20/CMake
-- Runtime state: `RUNTIME UNTESTED`
+- Action policy: pure background window click only
+- Runtime evidence: `UNTESTED`
 
-## Project Goal
-Prove one narrow question before building a larger tool: **can the frozen Thần Long client/server accept semantic loot interaction/pickup while the local character remains farther away than the built-in normal pickup flow?**
+## User Goal
+Một tổ đội có 1 acc chính và 1..6 acc con. Tất cả train; acc con tự dồn đồ cho acc chính khi túi gần đầy; acc chính nhận đồ và tự bán khi túi gần đầy. Tool điều phối để không có hai acc con tranh giao dịch cùng lúc.
 
-## Current State
-### Source implemented
-- process discovery via loaded `GameAssembly.dll`;
-- per-PID shared-memory controller/bridge protocol;
-- `WH_GETMESSAGE` bridge injected on the target window thread;
-- IL2CPP export/class/method discovery by semantic names;
-- read-only Unity `SynchronizationContext` validation;
-- read-only loot API signature dump;
-- read-only nearest-pack probe when `GetNearestItemPack` is zero-arg at runtime;
-- one-shot `ClickToObject(RoleID)` test with no PoC movement call;
-- one-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call;
-- read-only `HasBuff(30008009)` test.
+## Hard Requirements
+1. `clinent-game-than-long-DATA-2222` là read-only knowledge source; không phát triển code ở đó.
+2. Project hiện tại không dùng internal Game/Lua/packet action.
+3. Không inject DLL/hook bridge.
+4. Click nền không di chuyển con trỏ vật lý.
+5. Tọa độ click phải scale theo kích thước cửa sổ.
+6. Tối đa 6 acc con / 6 target slots.
+7. Chỉ một trade transaction toàn hệ thống tại một thời điểm.
+8. Acc con không auto-sell.
+9. Sau mỗi trade rescan túi tất cả acc mặc định.
+10. Delay/repeat/số click phải sửa ngoài source qua macro files.
 
-### Runtime-confirmed working
-None yet.
+## Knowledge-base facts used only for semantic understanding
+The canonical research repo verifies that selected-player UI has stable RoleID/social action semantics and that Trade is a real selected-player action (`C_OtherRoleCommand.Trade = 7`, `CMD_OTHER_ROLE_COMMAND = 200051`). This project deliberately does **not** emit that packet; the fact is used only to validate that the visible “select player -> trade” flow is semantically legitimate and worth automating by click.
 
-### Built but runtime-untested
-All v0.1.0 behavior until CI/runtime evidence says otherwise.
+Canonical inventory knowledge also verifies that bag free-space exists semantically in the client, but this project does **not** call `Game.GetFreeBagSpace()`. v0.1.0 uses a visual bag-grid scanner to honor the pure-click/no-internal constraint.
 
-## Hard Rules
-1. This repository is an **independent RemoteLoot proof tool**, not a branch of Auto Train/Auto Sell.
-2. Do not add automatic movement to remote pickup tests.
-3. Do not add auto-loop/spam until one-shot server acceptance is established.
-4. Do not claim direct remote pickup PASS from a successful method invocation alone.
-5. PASS requires concrete runtime state: character stays put, target pack changes/disappears, bag/item state changes correctly, and no disconnect/crash.
-6. A crash/disconnect can be an execution-boundary failure and must not be silently interpreted as server rejection.
-7. Càn Khôn Hồ mechanism remains UNKNOWN. Only the built-in `HasBuff(30008009)` skip guard is VERIFIED from shipped source.
-8. Do not broad reverse-engineer the client. Use the canonical knowledge repo first and only investigate exact missing facts.
+## Current Implementation
+- visible top-level window discovery by title substring;
+- user selects MAIN and ordered CHILD list;
+- ordered CHILD list maps to trade slot 1..6;
+- normalized background click (`PostMessage` or `SendMessageTimeout`);
+- per-click auto-resize;
+- external macro DSL: sleep/click/grid;
+- visual bag scan over configurable grid;
+- mouse-assisted one-time bag geometry wizard;
+- empty-slot one-time calibration;
+- uncertain-scan fail-closed guard;
+- separate child/main free-slot thresholds;
+- dynamic transfer click cap based on MAIN free space + configurable max per trade;
+- single global transaction mutex;
+- round-robin CHILD selection;
+- deterministic pure-click trade flow;
+- MAIN-only sell flow;
+- mandatory rescan after trade by default;
+- optional calibrated visual death detector and recovery macro path.
 
-## Verified Client Facts Used
-From canonical knowledge:
-- `Game.GetNearestItemPack(...)` / `Game.GetNearbyItemPack(...)` exist for item-pack discovery.
-- item packs expose at least `Type`, `RoleID`, `Position` in shipped Lua.
-- normal shipped auto pickup uses `MoveToEx` when distance >100, then `ClickToObject(RoleID)`.
-- shipped pick-all is `Game.PickUpItemFromItemPack(itemPackID,-1,1)`.
-- built-in auto pickup skips while `Game.HasBuff(30008009)` and mentions Càn Khôn Hồ.
+## Key Hidden Assumptions / Risks
+- `10 x 9 = 90` bag layout is currently only a default from the user's prior 90-click description; actual UI must be measured.
+- Background `WM_MOUSE...` delivery may fail on this Unity build even while the window is visible. This is a runtime proof, not guaranteed by Win32 code compiling.
+- Visual slot classification can drift with UI scale/theme/item icons; threshold must be tested and uncertain scans must not trigger action.
+- Fixed macro delays can race network/UI latency. Initial values should be conservative.
+- “Move to anchor” is represented as a macro because current project forbids internal movement calls.
+- Exact trade popup/confirm count is not yet recorded from runtime video/screenshots in this repo, so shipped trade macros are intentionally placeholders.
+- Item stacking means one item click does not guarantee one MAIN free slot disappears; therefore every transaction is followed by fresh scanning.
 
-## Important Unknowns
-- Is `ItemPack.RoleID` identical to the `itemPackID` expected by direct pickup in all runtime cases?
-- Does server accept direct pickup when farther than normal pickup range and buff 30008009 is absent?
-- Does server acceptance change when buff 30008009 is present?
-- Does Càn Khôn Hồ use this same request path or a separate server-driven subsystem?
-- Is direct invocation from the validated message-hook context stable enough for this one-shot proof on the target build?
+## v0.1.0 Evidence Status
+### SOURCE
+Implemented.
 
-## Current Test Order
-1. Validate Unity managed context.
-2. Resolve exact runtime loot method signatures.
-3. Scan nearest pack if signature is supported.
-4. Record buff 30008009 absent/present.
-5. At >100 distance, test `ClickToObject(RoleID)` with no movement call.
-6. At >100 distance, test `PickUpItemFromItemPack(candidate,-1,1)` with no movement call.
-7. Record pack/bag/movement/disconnect result.
-8. Repeat under the opposite Càn Khôn Hồ buff state.
+### CI
+Pending GitHub Actions for this branch.
 
-## Evidence Index
-- `EVID-001`: canonical shipped Lua/API knowledge establishes normal loot flow and direct semantic pickup call.
-- Runtime evidence for v0.1.0: pending user test.
+### RUNTIME
+Untested.
+
+## Next Runtime Test Order
+1. Fill one harmless `click` macro and prove `post` mode clicks the correct UI without moving mouse.
+2. Repeat on 2 differently sized game windows; verify normalized scaling.
+3. If `post` misses, test `send` mode.
+4. Run bag geometry wizard and calibrate one empty slot.
+5. Compare scanner count against manual count on bags with many/medium/few empty slots.
+6. Record exact trade click flow for one MAIN + one CHILD.
+7. Fill macros and test one trade manually through the coordinator.
+8. Test main stop threshold `<9` and MAIN-only sell macro.
+9. Scale to 2..6 children and verify single-transaction queue.
+10. Calibrate death detector and test recovery only after the death UI sample is available.
 
 ## Decisions
-- `DEC-001`: keep v0.1.0 one-shot and movement-free.
-- `DEC-002`: refuse to guess unsupported runtime signatures; print them and stop that probe.
-- `DEC-003`: if remote pickup passes, production implementation must use a proper action gate/MainThread dispatcher/state proof rather than preserving PoC shortcuts.
+- DEC-001: keep v0.1.0 action layer pure background window click.
+- DEC-002: remove old injection/bridge source from build rather than mixing architectures.
+- DEC-003: use external macro files so click count/delay/repeat changes do not require rebuild.
+- DEC-004: action input remains pure background window message; no fallback that steals physical mouse.
+- DEC-005: bag scanner is fail-closed on uncertainty.
+- DEC-006: do not invent live click coordinates; placeholders remain until runtime capture/test.
+- DEC-007: cap item clicks per transaction from MAIN remaining free space; never blindly click an entire child bag into a nearly-full MAIN.
