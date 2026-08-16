@@ -32,6 +32,7 @@ Added a standalone x64 native PoC with:
 - one-shot no-movement `ClickToObject`;
 - one-shot no-movement direct pick-all;
 - buff 30008009 read probe;
+- `GetFreeBagSpace()` before/after auxiliary proof and post-action nearest-pack rescan;
 - CI build artifact.
 
 ## F. Important Implementation Details
@@ -52,18 +53,22 @@ Added/updated:
 - project docs
 
 ## H. Build / CI History
-- Initial CI: pending at document creation; final result must be updated after workflow completion.
+- Final code commit: `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e`.
+- GitHub Actions run #8, run ID `31941065682`.
+- Final Build: `BUILD PASS`.
+- CI: `CI PASS` on Windows x64.
+- Artifact contents: `RemoteLootProbe.exe`, `RemoteLootBridge.dll`, README.
 
 ## I. Runtime Result
 - RUNTIME: UNTESTED
-- Confirmed Working: none yet
+- Confirmed Working: none yet on the live game/server
 - Awaiting Test: all target-game behavior
 
 ## J. Failed Attempts
 None recorded yet.
 
 ## K. Known-Good Established
-None.
+None. CI success is not runtime known-good.
 
 ## L. Remaining Questions
 1. Exact runtime signature/instance availability of loot methods on the target build.
