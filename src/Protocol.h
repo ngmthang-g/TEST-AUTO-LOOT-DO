@@ -18,6 +18,7 @@ enum class Command : std::uint32_t {
     ClickObject = 4,
     DirectPickupAll = 5,
     HasCanKhonHoBuff = 6,
+    GetFreeBagSpace = 7,
 };
 
 enum class ResultCode : std::int32_t {
