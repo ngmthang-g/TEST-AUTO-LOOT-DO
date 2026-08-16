@@ -1,34 +1,33 @@
 # CHANGELOG
 
-## [v0.1.0] - 2026-08-16
+## v0.1.0 — Item Consolidator foundation
 
-### Requested
-- Build a very small independent RemoteLoot PoC to determine which loot action the server accepts at distance.
-- Prioritize proof of direct remote pickup before building a complete tool.
+### Project reset
+- Repurposed repository from unrelated RemoteLoot PoC to the requested MAIN/CHILD item-consolidation tool.
+- Removed internal bridge/injection architecture from the product design.
 
-### Added / Changed
-- Windows x64 C++ controller and injected `WH_GETMESSAGE` bridge.
-- Runtime IL2CPP semantic resolver for loot APIs.
-- Unity managed-context validation.
-- Nearest ItemPack probe when runtime signature is supported without guessing.
-- One-shot `ClickToObject(RoleID)` test with no PoC movement call.
-- One-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call.
-- `HasBuff(30008009)` Càn Khôn Hồ state probe.
-- `GetFreeBagSpace()` before/after auxiliary pickup proof plus nearest-pack rescan.
-- GitHub Actions Windows x64 build/artifact workflow.
-- Project knowledge and runtime test procedure.
+### Added
+- Visible game-window discovery.
+- Runtime MAIN selection + ordered 1..6 CHILD selection.
+- CHILD order -> trade slot 1..6 mapping.
+- Pure Win32 background click modes: `post` / `send`.
+- Normalized coordinates auto-scaled to each current client size.
+- External macro DSL with configurable delays, repeat counts and grid clicks.
+- Mouse-assisted one-time bag geometry wizard.
+- Visual 90-slot-default bag scanner with one-time empty-slot calibration.
+- Uncertain visual scan guard.
+- Separate CHILD trigger and MAIN stop/sell thresholds.
+- Dynamic per-trade item-click cap derived from MAIN free space plus a configurable hard maximum.
+- Single global trade/sell mutex.
+- Round-robin waiting queue.
+- Trade orchestration flow and MAIN-only sell flow.
+- Rescan-all-after-trade behavior.
+- Visual death-signature detector and `revive_return` recovery path (disabled until calibrated).
 
-### Build
-- Final code commit tested by CI: `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e`.
-- GitHub Actions run: `#8` / run ID `31941065682`.
-- Final: `BUILD PASS` / `CI PASS` on Windows x64.
-- Artifact workflow packages `RemoteLootProbe.exe`, `RemoteLootBridge.dll`, and README.
-
-### Runtime
-- Status: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN`.
-- Càn Khôn Hồ remote-loot mechanism: `UNKNOWN`.
-
-### Next Version Notes
-- Do not add automation loops yet.
-- First collect repeatable runtime evidence for distant `ClickToObject` and direct pick-all with buff 30008009 absent/present.
+### Not runtime verified yet
+- Whether the current Unity client accepts background `WM_MOUSE...` reliably.
+- Exact live UI coordinates/macros.
+- Bag-grid geometry and visual thresholds.
+- Exact trade confirmation sequence.
+- Sell path.
+- Death visual signature and recovery macro.

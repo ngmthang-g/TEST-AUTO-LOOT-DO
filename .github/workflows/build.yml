@@ -1,8 +1,9 @@
-name: build-remote-loot-poc
+name: build-item-consolidator
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, agent/item-consolidator-v0.1 ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -21,13 +22,16 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item build/Release/RemoteLootProbe.exe dist/
-          Copy-Item build/Release/RemoteLootBridge.dll dist/
+          Copy-Item build/Release/ThanLongItemConsolidator.exe dist/
           Copy-Item README.md dist/
+          Copy-Item PROJECT_KNOWLEDGE.md dist/
+          Copy-Item docs -Destination dist/docs -Recurse
+          Copy-Item config -Destination dist/config -Recurse
+          Copy-Item macros -Destination dist/macros -Recurse
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RemoteLootPoC-v0.1.0-win-x64
-          path: dist/*
+          name: ThanLongItemConsolidator-v0.1.0-win-x64
+          path: dist/**
           if-no-files-found: error
