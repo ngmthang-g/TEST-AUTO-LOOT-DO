@@ -59,8 +59,9 @@ std::wstring Utf8ToWide(const char* text) {
     if (!text || !*text) return L"";
     const int needed = MultiByteToWideChar(CP_UTF8, 0, text, -1, nullptr, 0);
     if (needed <= 1) return L"";
-    std::wstring out(static_cast<std::size_t>(needed - 1), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, text, -1, out.data(), needed);
+    std::wstring out(static_cast<std::size_t>(needed), L'\0');
+    if (MultiByteToWideChar(CP_UTF8, 0, text, -1, out.data(), needed) <= 0) return L"";
+    out.resize(static_cast<std::size_t>(needed - 1));
     return out;
 }
 
@@ -350,15 +351,17 @@ ResultCode ResolveLootMethods(Il2CppApi& a, std::wstring& detail) {
     const auto* click = FindMethodAnyCount(a, apiGame, "ClickToObject");
     const auto* pickup = FindMethodAnyCount(a, apiGame, "PickUpItemFromItemPack");
     const auto* buff = FindMethodAnyCount(a, apiGame, "HasBuff");
+    const auto* freeBag = FindMethodAnyCount(a, apiGame, "GetFreeBagSpace");
     const auto* nearest = FindMethodAnyCount(a, shared, "GetNearestItemPack");
 
     detail = L"Loot API signatures:\n";
     detail += L"  " + MethodSignature(a, apiGame, click) + L"\n";
     detail += L"  " + MethodSignature(a, apiGame, pickup) + L"\n";
     detail += L"  " + MethodSignature(a, apiGame, buff) + L"\n";
+    detail += L"  " + MethodSignature(a, apiGame, freeBag) + L"\n";
     detail += L"  " + MethodSignature(a, shared, nearest);
 
-    return (click && pickup && buff && nearest) ? ResultCode::Ok : ResultCode::MethodNotFound;
+    return (click && pickup && buff && freeBag && nearest) ? ResultCode::Ok : ResultCode::MethodNotFound;
 }
 
 ResultCode InvokeGameIntegerMethod(Il2CppApi& a, const char* methodName, int expectedParamCount,
@@ -398,6 +401,19 @@ ResultCode InvokeGameIntegerMethod(Il2CppApi& a, const char* methodName, int exp
     if (resultObject) *resultObject = ret;
     if (resolvedMethod) *resolvedMethod = method;
     detail = L"Invoked " + MethodSignature(a, apiGame, method);
+    return ResultCode::Ok;
+}
+
+ResultCode ReadGameIntegerMethod(Il2CppApi& a, const char* methodName, int expectedParamCount,
+                                 const std::array<std::int64_t, 3>& values, std::int64_t& out, std::wstring& detail) {
+    Il2CppObject* ret = nullptr;
+    const MethodInfo* method = nullptr;
+    auto rc = InvokeGameIntegerMethod(a, methodName, expectedParamCount, values, detail, &ret, &method);
+    if (rc != ResultCode::Ok) return rc;
+    if (!ReadIntegralObject(a, ret, a.method_get_return_type(method), out)) {
+        detail += L"; return value could not be unboxed as bool/integer";
+        return ResultCode::FieldReadFailed;
+    }
     return ResultCode::Ok;
 }
 
@@ -503,18 +519,22 @@ void HandleCommand(SharedBlock& s) {
         }
 
         case Command::HasCanKhonHoBuff: {
-            Il2CppObject* ret = nullptr;
-            const MethodInfo* method = nullptr;
-            s.result = InvokeGameIntegerMethod(api, "HasBuff", 1, {30008009, 0, 0}, detail, &ret, &method);
+            std::int64_t value = 0;
+            s.result = ReadGameIntegerMethod(api, "HasBuff", 1, {30008009, 0, 0}, value, detail);
             if (s.result == ResultCode::Ok) {
-                std::int64_t value = 0;
-                if (!ReadIntegralObject(api, ret, api.method_get_return_type(method), value)) {
-                    s.result = ResultCode::FieldReadFailed;
-                    detail += L"; return value could not be unboxed as bool/integer";
-                } else {
-                    s.out0 = value;
-                    detail += value ? L"; buff 30008009 PRESENT" : L"; buff 30008009 ABSENT";
-                }
+                s.out0 = value;
+                detail += value ? L"; buff 30008009 PRESENT" : L"; buff 30008009 ABSENT";
+            }
+            SetDetail(s, detail);
+            return;
+        }
+
+        case Command::GetFreeBagSpace: {
+            std::int64_t value = 0;
+            s.result = ReadGameIntegerMethod(api, "GetFreeBagSpace", 0, {0, 0, 0}, value, detail);
+            if (s.result == ResultCode::Ok) {
+                s.out0 = value;
+                detail += L"; free bag space=" + std::to_wstring(value);
             }
             SetDetail(s, detail);
             return;
