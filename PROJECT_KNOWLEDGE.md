@@ -3,88 +3,82 @@
 ## Project Identity
 - Name: ThanLong Item Consolidator
 - Repository: `ngmthang-g/TESTauto-don-do-acc-chinh`
-- Branch under development: `agent/item-consolidator-v0.1`
+- Development branch: `agent/item-consolidator-v0.1`
 - Version: `v0.1.0`
 - Platform: Windows x64, native C++20/CMake
 - Action policy: pure background window click only
-- Runtime evidence: `UNTESTED`
+- Source/CI: `PASS`
+- Runtime game evidence: `UNTESTED`
 
 ## User Goal
-Một tổ đội có 1 acc chính và 1..6 acc con. Tất cả train; acc con tự dồn đồ cho acc chính khi túi gần đầy; acc chính nhận đồ và tự bán khi túi gần đầy. Tool điều phối để không có hai acc con tranh giao dịch cùng lúc.
+One MAIN account and 1..6 CHILD accounts train together. CHILD accounts transfer items to MAIN when their bags approach full. MAIN receives items and sells when its own bag approaches full. The tool coordinates windows so only one CHILD can trade at a time.
 
 ## Hard Requirements
-1. `clinent-game-than-long-DATA-2222` là read-only knowledge source; không phát triển code ở đó.
-2. Project hiện tại không dùng internal Game/Lua/packet action.
-3. Không inject DLL/hook bridge.
-4. Click nền không di chuyển con trỏ vật lý.
-5. Tọa độ click phải scale theo kích thước cửa sổ.
-6. Tối đa 6 acc con / 6 target slots.
-7. Chỉ một trade transaction toàn hệ thống tại một thời điểm.
-8. Acc con không auto-sell.
-9. Sau mỗi trade rescan túi tất cả acc mặc định.
-10. Delay/repeat/số click phải sửa ngoài source qua macro files.
+1. `clinent-game-than-long-DATA-2222` is read-only research/knowledge; code changes belong only in this repo.
+2. No internal Game/Lua/packet action path.
+3. No DLL injection/hook bridge.
+4. Runtime click must not move or occupy the physical mouse.
+5. Every click coordinate auto-scales to the current game-client rectangle.
+6. 1..6 CHILD accounts map to ordered trade slots 1..6.
+7. One global trade/sell transaction owner at a time.
+8. CHILD never auto-sells.
+9. Rescan all bags after each trade by default.
+10. Click count, delay and repeat are external macro data, not hard-coded behavior.
+11. Unconfigured macros must fail closed instead of pretending success.
 
-## Knowledge-base facts used only for semantic understanding
-The canonical research repo verifies that selected-player UI has stable RoleID/social action semantics and that Trade is a real selected-player action (`C_OtherRoleCommand.Trade = 7`, `CMD_OTHER_ROLE_COMMAND = 200051`). This project deliberately does **not** emit that packet; the fact is used only to validate that the visible “select player -> trade” flow is semantically legitimate and worth automating by click.
+## Canonical facts used only for semantic understanding
+Canonical research verifies selected-player Trade exists and is driven by target RoleID. This project intentionally does not emit that internal request; the evidence is only used to validate the visible UI flow that click macros reproduce.
 
-Canonical inventory knowledge also verifies that bag free-space exists semantically in the client, but this project does **not** call `Game.GetFreeBagSpace()`. v0.1.0 uses a visual bag-grid scanner to honor the pure-click/no-internal constraint.
+Canonical research also verifies bag free-space exists semantically, but v0.1.0 does not call it. Bag state for orchestration is visual-only to honor the no-internal constraint.
 
 ## Current Implementation
-- visible top-level window discovery by title substring;
-- user selects MAIN and ordered CHILD list;
-- ordered CHILD list maps to trade slot 1..6;
-- normalized background click (`PostMessage` or `SendMessageTimeout`);
-- per-click auto-resize;
-- external macro DSL: sleep/click/grid;
-- visual bag scan over configurable grid;
-- mouse-assisted one-time bag geometry wizard;
-- empty-slot one-time calibration;
-- uncertain-scan fail-closed guard;
-- separate child/main free-slot thresholds;
-- dynamic transfer click cap based on MAIN free space + configurable max per trade;
-- single global transaction mutex;
+- visible top-level game-window discovery by title substring;
+- MAIN selection + ordered 1..6 CHILD selection;
+- CHILD order maps to `trade_invite_1..6`;
+- background click via `PostMessage` or `SendMessageTimeout`;
+- normalized 0..1 coordinate scaling on every click;
+- external macro DSL: `sleep`, `click`, `grid`;
+- fail-closed `UNCONFIGURED` shipped macros;
+- visual bag-grid scanner with geometry wizard and empty-slot calibration;
+- uncertain visual scan prevents trade/sell decisions;
+- CHILD trigger default `freeSlots <= 9`;
+- MAIN sell default `freeSlots < 9`;
+- dynamic transfer grid-click cap from MAIN remaining capacity plus configurable hard cap;
 - round-robin CHILD selection;
-- deterministic pure-click trade flow;
-- MAIN-only sell flow;
-- mandatory rescan after trade by default;
-- optional calibrated visual death detector and recovery macro path.
+- global transaction mutex;
+- flow: stop train -> both move anchor -> MAIN invite -> CHILD accept/give/confirm -> MAIN confirm -> restart -> rescan;
+- MAIN-only sell -> rescan -> move anchor -> train;
+- optional visual death signature -> revive_return -> anchor -> train -> rescan.
 
-## Key Hidden Assumptions / Risks
-- `10 x 9 = 90` bag layout is currently only a default from the user's prior 90-click description; actual UI must be measured.
-- Background `WM_MOUSE...` delivery may fail on this Unity build even while the window is visible. This is a runtime proof, not guaranteed by Win32 code compiling.
-- Visual slot classification can drift with UI scale/theme/item icons; threshold must be tested and uncertain scans must not trigger action.
-- Fixed macro delays can race network/UI latency. Initial values should be conservative.
-- “Move to anchor” is represented as a macro because current project forbids internal movement calls.
-- Exact trade popup/confirm count is not yet recorded from runtime video/screenshots in this repo, so shipped trade macros are intentionally placeholders.
-- Item stacking means one item click does not guarantee one MAIN free slot disappears; therefore every transaction is followed by fresh scanning.
+## Important Risks / Missing Runtime Data
+- A compiling `WM_MOUSE...` click path does not prove this Unity/InputSystem accepts it. `post` and `send` require live proof.
+- `PrintWindow` can return a frame that is stale/black on some Unity render paths; bag/death capture must be compared with visible UI.
+- 10x9=90 slots is only a default assumption until measured on the live bag UI.
+- Visual slot thresholds may drift with UI scale, icon animation/theme or capture behavior; uncertain scans are intentionally fail-closed.
+- Fixed timing can race network/UI latency; initial macro delays should be conservative.
+- Exact trade/sell/revive coordinates are deliberately not guessed in the repository.
+- Death detection is checked by the single-threaded coordinator between actions. v0.1.0 does **not** preempt a macro that is already mid-sequence; recovery begins on the next coordinator cycle.
+- Item stacking means one CHILD item click is not guaranteed to consume one MAIN free slot; fresh rescan after each trade is authoritative for the next decision.
 
-## v0.1.0 Evidence Status
-### SOURCE
-Implemented.
+## CI Evidence
+Commit `2a2b7ea4f2c2ef1e2511bb820a2754e47be19fab`, GitHub Actions run `31961357854` (#17): configure/build/stage/upload all PASS. Artifact `ThanLongItemConsolidator-v0.1.0-win-x64`, ID `9267326722`.
 
-### CI
-Pending GitHub Actions for this branch.
-
-### RUNTIME
-Untested.
-
-## Next Runtime Test Order
-1. Fill one harmless `click` macro and prove `post` mode clicks the correct UI without moving mouse.
-2. Repeat on 2 differently sized game windows; verify normalized scaling.
-3. If `post` misses, test `send` mode.
-4. Run bag geometry wizard and calibrate one empty slot.
-5. Compare scanner count against manual count on bags with many/medium/few empty slots.
-6. Record exact trade click flow for one MAIN + one CHILD.
-7. Fill macros and test one trade manually through the coordinator.
-8. Test main stop threshold `<9` and MAIN-only sell macro.
-9. Scale to 2..6 children and verify single-transaction queue.
-10. Calibrate death detector and test recovery only after the death UI sample is available.
+## Runtime Test Order
+1. Replace `UNCONFIGURED` in one safe click flow with measured normalized coordinates.
+2. Prove `post` clicks the correct visible Unity UI without moving the real cursor.
+3. Repeat the same macro on two different window sizes to validate normalized scaling.
+4. If `post` misses, test `send`; do not fall back to `SendInput`/`SetCursorPos` because that violates the user requirement.
+5. Calibrate bag geometry + one known empty slot and compare scan counts to manual counts at multiple fill levels.
+6. Record/fill exact one-MAIN + one-CHILD trade macros and test one transaction.
+7. Verify MAIN stops receiving below 9 free slots and runs MAIN-only sell.
+8. Scale to 2..6 CHILD and confirm transaction serialization/round-robin behavior.
+9. Calibrate a stable death UI patch and test revive/return only after trade/bag flow is stable.
 
 ## Decisions
-- DEC-001: keep v0.1.0 action layer pure background window click.
-- DEC-002: remove old injection/bridge source from build rather than mixing architectures.
-- DEC-003: use external macro files so click count/delay/repeat changes do not require rebuild.
-- DEC-004: action input remains pure background window message; no fallback that steals physical mouse.
-- DEC-005: bag scanner is fail-closed on uncertainty.
-- DEC-006: do not invent live click coordinates; placeholders remain until runtime capture/test.
-- DEC-007: cap item clicks per transaction from MAIN remaining free space; never blindly click an entire child bag into a nearly-full MAIN.
+- Keep action layer pure background click.
+- Remove old RemoteLoot bridge/injection source rather than mix architectures.
+- Externalize mutable UI sequencing as macros.
+- Never use a physical-mouse fallback silently.
+- Fail closed on uncertain bag scans and unconfigured macros.
+- Do not invent live coordinates.
+- Cap transfer clicks using MAIN capacity and always rescan after trade.

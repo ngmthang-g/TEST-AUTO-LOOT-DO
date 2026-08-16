@@ -7,6 +7,7 @@ grid <left> <top> <cols> <rows> <step_x> <step_y> <count> [interval_ms=120] [aft
 IMPORTANT:
 - 0.0,0.0 is top-left of the game CLIENT area.
 - 1.0,1.0 is bottom-right of the current game CLIENT area.
-- The shipped *.macro files are safe placeholders and intentionally do NOT contain guessed live coordinates.
-- Fill coordinates only after testing against the real client.
+- Shipped *.macro files contain an `UNCONFIGURED` line on purpose.
+- `UNCONFIGURED` is NOT valid DSL: it makes that macro fail parsing so the tool cannot pretend an empty placeholder succeeded.
+- After measuring a real UI flow, replace the whole placeholder with tested sleep/click/grid steps and remove `UNCONFIGURED`.
 - Keep delays conservative first; reduce them only after repeated stable tests.

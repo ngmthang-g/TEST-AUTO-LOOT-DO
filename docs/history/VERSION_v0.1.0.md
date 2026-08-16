@@ -1,41 +1,44 @@
 # VERSION v0.1.0 — Item Consolidator Foundation
 
-## User request captured
-Build an automation coordinator for one MAIN account and 1..6 CHILD accounts. All accounts train. CHILD accounts transfer items to MAIN when their bags approach full. MAIN receives and sells when its bag approaches full. Only one CHILD may trade at a time. Actions must be pure background clicks, must not consume the physical mouse, and must scale with game-window size.
+## Goal captured
+Build a coordinator for one MAIN and 1..6 CHILD accounts. All accounts train. CHILD transfers items when free slots approach the configured threshold. MAIN receives and sells when its free slots fall below the MAIN threshold. Only one trade can run at once. Actions are pure background clicks, do not occupy the physical mouse and scale with game-window size.
 
 ## Implemented
 - repo reset from unrelated RemoteLoot PoC;
-- one EXE, no bridge DLL;
-- visible-window discovery and MAIN/CHILD selection;
-- 1..6 ordered target slots;
-- PostMessage/SendMessageTimeout click modes;
-- normalized per-click coordinate scaling;
-- external editable macro files;
-- configurable delay/repeat/grid clicks;
-- visual bag geometry wizard;
-- visual empty-slot calibration and scan;
-- uncertain-scan guard;
+- one Windows x64 EXE, no bridge DLL/injection;
+- visible game-window discovery;
+- MAIN + ordered 1..6 CHILD assignment;
+- `post` / `send` background click engine;
+- normalized coordinate scaling per click;
+- external `sleep/click/grid` macro DSL;
+- safe `UNCONFIGURED` macro placeholders that fail closed;
+- bag geometry wizard;
+- visual empty-slot calibration + bag scan;
+- uncertainty guard;
 - separate MAIN/CHILD thresholds;
-- dynamic per-trade grid-click cap from MAIN capacity;
+- dynamic per-trade grid-click cap from MAIN free capacity;
 - round-robin CHILD scheduler;
-- one global transaction mutex;
-- MAIN-only sell flow;
-- full rescan after trade;
-- optional calibrated visual death detector and recovery macro path;
-- GitHub Actions packaging for Windows x64.
+- global trade/sell transaction mutex;
+- MAIN-only sell path;
+- rescan after trade;
+- optional visual death detector + revive/return macro path;
+- Windows x64 GitHub Actions packaging.
 
-## Not claimed as runtime PASS
-- background click acceptance by current Unity build;
-- live UI coordinates;
-- bag scanner accuracy;
-- trade timing/confirmation sequence;
-- sell path;
-- death detection/recovery.
+## CI result
+- initial compile exposed legacy Win32 `near` macro collision;
+- second compile exposed legacy Win32 `min/max` collisions;
+- compatibility header now undefines `near/min/max` after the forced Windows include;
+- final commit `2a2b7ea4f2c2ef1e2511bb820a2754e47be19fab`;
+- Actions run `31961357854` (#17): configure PASS, build PASS, stage PASS, artifact upload PASS;
+- artifact `ThanLongItemConsolidator-v0.1.0-win-x64` ID `9267326722`.
 
-## Required next evidence
-1. CI green.
-2. Safe background click probe on one visible client.
-3. Same normalized click on two different window sizes.
-4. Bag geometry/calibration versus manual free-slot count.
-5. One MAIN + one CHILD trade end-to-end.
-6. Scale to 2..6 CHILD and observe serialization.
+## Runtime still unverified
+- Unity acceptance of `PostMessage`/`SendMessageTimeout`;
+- exact live UI macro coordinates;
+- bag capture/geometry/threshold accuracy;
+- trade popup/confirm timing;
+- MAIN sell sequence;
+- death signature and recovery clicks.
+
+## Next evidence
+Start with one MAIN + one CHILD and prove background clicking + normalized scaling before filling the longer trade/sell/revive macros.
