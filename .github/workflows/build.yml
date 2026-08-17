@@ -1,33 +1,73 @@
-name: build-remote-loot-poc
+name: build-item-consolidator-v026
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - agent/item-consolidator-v0.2.6-consolidation-toggle-sell-copy
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  windows-x64:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
+      - name: Rehydrate exact source through v0.2.6
+        shell: pwsh
+        run: .\tools\rehydrate_v159.ps1
       - name: Configure x64
-        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
-
+        run: cmake -S . -B build -A x64
       - name: Build Release
         run: cmake --build build --config Release --parallel
-
+      - name: Route logic self-test
+        run: .\build\Release\route_logic_tests.exe
+      - name: Rotation logic self-test
+        run: .\build\Release\rotation_logic_tests.exe
+      - name: Exact trade scheduler self-test
+        run: .\build\Release\trade_logic_tests.exe
+      - name: Static v0.2.6 consolidation-mode/sell-copy audit
+        shell: pwsh
+        run: |
+          $c = Get-Content generated\donor159\src\controller.cpp -Raw
+          foreach ($required in @(
+            'DỒN ĐỒ: BẬT',
+            'DỒN ĐỒ: TẮT',
+            'ToggleConsolidationMode',
+            'CopySellSequenceFromAnotherAccount',
+            'LẤY CHUỖI CỦA ACC...',
+            'AUTO TRAIN/BÁN ĐỒ ĐỘC LẬP',
+            '!tradeEnabled_ && s.freeBagSpace <= 0',
+            'AcquireCoordinatorSequenceFreeze',
+            'ReleaseCoordinatorSequenceFreeze',
+            'SEQUENCE LEASE',
+            'CHUỖI CLICK BÁN ĐỒ',
+            'coordinatorRecording_',
+            'SetForegroundWindow',
+            'SetCursorPos',
+            'SendInput',
+            'mainSellThreshold_ = 6',
+            'childTriggerFreeSlots_ = 0'
+          )) {
+            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.6 token: $required" }
+          }
+          if ($c -match 'REC BÁN ĐỒ chỉ dùng cho MAIN') { throw 'Sell REC must be available to any selected account' }
+          if ($c -match 'Chuỗi click bán đồ chỉ áp dụng cho MAIN') { throw 'Sell editor must be available to any selected account' }
+          if ($c -match 'tradeGlobalFreeze_') { throw 'obsolete whole-trade freeze must not return' }
+          if ($c -match 'roundRobinCursor_') { throw 'fixed CON1..CON6 priority required' }
+          $rawSend = ([regex]::Matches($c, 'SendInput\(')).Count
+          if ($rawSend -ne 2) { throw "Unexpected SendInput call count: $rawSend" }
+          Write-Host 'V0.2.6 CONSOLIDATION MODE / SELL COPY STATIC AUDIT PASS'
       - name: Stage artifact
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item build/Release/RemoteLootProbe.exe dist/
-          Copy-Item build/Release/RemoteLootBridge.dll dist/
-          Copy-Item README.md dist/
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          New-Item -ItemType Directory -Force stage | Out-Null
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.6.exe
+          Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
+          Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
+          Copy-Item macros stage\macros -Recurse
+          Copy-Item docs\history\VERSION_v0.2.6.md stage\VERSION_v0.2.6.md
+      - uses: actions/upload-artifact@v4
         with:
-          name: RemoteLootPoC-v0.1.0-win-x64
-          path: dist/*
-          if-no-files-found: error
+          name: ThanLongItemConsolidator-v0.2.6-win-x64
+          path: stage

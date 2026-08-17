@@ -1,0 +1,34 @@
+count = AccountByPid(capturePid_);
++        if (!captureAccount || !IsWindow(captureAccount->game.window)) {
+             Log(L"Lấy tọa độ thất bại: acc/cửa sổ đã mất.");
+             captureSlot_ = ClickSlot::None; captureMacroIndex_ = -1; capturePid_ = 0;
++            captureTradeSelectChildPid_ = 0; captureTradeSequenceIndex_ = -1;
+             return;
+         }
+         POINT screen{};
+         if (!GetCursorPos(&screen)) return;
+         POINT client = screen;
+-        if (!ScreenToClient(a->game.window, &client)) return;
++        if (!ScreenToClient(captureAccount->game.window, &client)) return;
+         RECT rc{};
+-        if (!GetClientRect(a->game.window, &rc)) return;
++        if (!GetClientRect(captureAccount->game.window, &rc)) return;
+         const int width = rc.right - rc.left;
+         const int height = rc.bottom - rc.top;
+         if (client.x < 0 || client.y < 0 || client.x >= width || client.y >= height) {
+-            LogAccount(*a, L"F8 bỏ qua: con trỏ không nằm trong client game của acc này.");
++            LogAccount(*captureAccount, L"F8 bỏ qua: con trỏ không nằm trong client game của acc đích.");
+             return;
+         }
+         const ClickPoint captured{client.x, client.y, width, height, true};
+-        if (captureMacroIndex_ >= 0) {
+-            if (captureMacroIndex_ >= static_cast<int>(a->profile.sellMacro.size())) {
+-                LogAccount(*a, L"F8 macro thất bại: dòng đã bị xóa.");
++        if (captureTradeSelectChildPid_ != 0) {
++            Account* child = AccountByPid(captureTradeSelectChildPid_);
++            if (!child || child->profile.tradeRole < 2) {
++                Log(L"F8 chọn CON thất bại: CON đã mất/đổi vai trò.");
++            } else {
++                child->profile.tradeSelectPoint = captured;
++                SaveProfile(child->profile);
++                LogAccount(*captureAccount, L"Đã lưu tọa MAIN chọn " + TradeRoleLabel(child->profile.tradeRole) + L" = " + PointDescription(cap

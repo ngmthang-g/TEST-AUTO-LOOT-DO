@@ -1,0 +1,37 @@
+count->profile);
++                LogAccount(*captureAccount, L"Đã lưu " + std::wstring(kClickLabels[static_cast<std::size_t>(index)]) + L" = " + PointDescription(captured));
+             }
+         }
+-        if (SelectedAccount() == a) LoadSelectedProfileToUi();
++        LoadSelectedProfileToUi();
+         captureSlot_ = ClickSlot::None; captureMacroIndex_ = -1; capturePid_ = 0;
++        captureTradeSelectChildPid_ = 0; captureTradeSequenceIndex_ = -1;
+     }
+ 
+     bool RealInputClick(Account& a, const POINT& clientPoint, std::wstring& error) {
+-        // v0.2.0: all runtime UI clicks are background window messages.
+-        // No SetForegroundWindow / SetCursorPos / SendInput and no physical mouse capture.
+         if (!IsWindow(a.game.window) || !IsWindowVisible(a.game.window)) {
+             error = L"Cửa sổ game không tồn tại/không visible"; return false;
+         }
+         if (IsIconic(a.game.window)) {
+-            error = L"Cửa sổ game đang minimized; chặn background click"; return false;
+-        }
+-        RECT rc{};
+-        if (!GetClientRect(a.game.window, &rc)) { error = L"Không đọc được client rect"; return false; }
+-        const int w = rc.right - rc.left, h = rc.bottom - rc.top;
+-        if (clientPoint.x < 0 || clientPoint.y < 0 || clientPoint.x >= w || clientPoint.y >= h) {
+-            error = L"Tọa độ click nằm ngoài client"; return false;
+-        }
+-        const LPARAM packed = MAKELPARAM(clientPoint.x, clientPoint.y);
+-        (void)PostMessageW(a.game.window, WM_MOUSEMOVE, 0, packed);
+-        if (!PostMessageW(a.game.window, WM_LBUTTONDOWN, MK_LBUTTON, packed)) {
+-            error = L"PostMessage LEFTDOWN thất bại"; return false;
+-        }
+-        Sleep(25);
+-        if (!PostMessageW(a.game.window, WM_LBUTTONUP, 0, packed)) {
+-            error = L"PostMessage LEFTUP thất bại"; return false;
+-        }
++            error = L"Cửa sổ game đang minimized; không click để tránh sai mục tiêu"; return false;
++        }
++        

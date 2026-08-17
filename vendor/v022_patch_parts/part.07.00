@@ -1,0 +1,72 @@
+uested for reliability.
+         return true;
+     }
+ 
+@@ -3945,9 +4444,13 @@ private:
+                         if (HIWORD(wp) == EN_KILLFOCUS) PersistGlobalTradeSettings();
+                         break;
+                     case IDC_TRADE_RELOAD:
+-                        tradeMacros_.Reload();
+-                        SetTradeStatus(L"GD: đã nạp lại macros/*.macro");
+-                        Log(L"Đã nạp lại macro giao dịch; macro UNCONFIGURED vẫn bị fail-closed.");
++                        OpenTradeSequenceEditor();
++                        break;
++                    case IDC_TRADE_SELECT_CAPTURE:
++                        BeginTradeSelectCapture();
++                        break;
++                    case IDC_TRADE_SELECT_TEST:
++                        TestTradeSelectPoint();
+                         break;
+                     case IDC_START_CHECKED:
+                         StartChecked();
+@@ -4076,6 +4579,7 @@ private:
+         return DefWindowProcW(hwnd_, msg, wp, lp);
+     }
+ 
++    HINSTANCE instance_ = nullptr;
+     HWND hwnd_ = nullptr;
+     HWND clientList_ = nullptr;
+     HWND selected_ = nullptr;
+@@ -4085,6 +4589,14 @@ private:
+     HWND childTriggerEdit_ = nullptr;
+     HWND mainSellThresholdEdit_ = nullptr;
+     HWND tradeStatus_ = nullptr;
++    HWND tradeSelectPointLabel_ = nullptr;
++    HWND tradeEditor_ = nullptr;
++    HWND tradeSeqList_ = nullptr;
++    HWND tradeSeqTarget_ = nullptr;
++    HWND tradeSeqKind_ = nullptr;
++    HWND tradeSeqDesc_ = nullptr;
++    HWND tradeSeqDelay_ = nullptr;
++    HWND tradeSeqRepeat_ = nullptr;
+     HWND shutdownEnable_ = nullptr;
+     HWND shutdownHourEdit_ = nullptr;
+     HWND shutdownMinuteEdit_ = nullptr;
+@@ -4119,14 +4631,25 @@ private:
+     ClickSlot captureSlot_ = ClickSlot::None;
+     int captureMacroIndex_ = -1;
+     DWORD capturePid_ = 0;
++    DWORD captureTradeSelectChildPid_ = 0;
++    int captureTradeSequenceIndex_ = -1;
+     bool globalPaused_ = false;
+     bool rotationUiLoading_ = false;
+     DWORD globalLastRealInputTick_ = 0;
+ 
+-    MacroLibrary tradeMacros_{};
++    MacroLibrary tradeMacros_{}; // legacy v0.2.1 file macros, no longer used by active v0.2.2 trade flow.
+     BackgroundClicker backgroundClicker_{};
+     MacroRunner tradeRunner_{};
+-    struct TradeTxn { TradePhase phase = TradePhase::Idle; DWORD mainPid = 0; DWORD childPid = 0; int childSlot = 0; DWORD startedTick = 0; DWORD cooldownUntil = 0; DWORD targetPid = 0; std::string macroName; } tradeTxn_{};
++    std::vector<TradeSequenceStep> tradeSequence_{};
++    struct TradeTxn {
++        TradePhase phase = TradePhase::Idle;
++        DWORD mainPid = 0; DWORD childPid = 0; int childSlot = 0;
++        DWORD startedTick = 0; DWORD cooldownUntil = 0; DWORD targetPid = 0;
++        std::string macroName;
++        std::size_t sequenceIndex = 0;
++        int sequenceRepeatDone = 0;
++        DWORD sequenceDueTick = 0;
++    } tradeTxn_{};
+     bool tradeEnabled_ = true;
+     int childTriggerFreeSlots_ = 0; // fixed FULL-only rule
+     int mainSellThreshold_ = 6;

@@ -1,0 +1,133 @@
+eat = 1;
++        tradeSequence_.push_back(step);
++        SaveTradeSequence();
++        RefreshTradeSequenceList();
++        const int row = static_cast<int>(tradeSequence_.size()) - 1;
++        ListView_SetItemState(tradeSeqList_, row, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
++        ListView_EnsureVisible(tradeSeqList_, row, FALSE);
++        LoadTradeSequenceRowToEditor(row);
++    }
++
++    void DeleteTradeSequenceRow() {
++        const int row = SelectedTradeSequenceIndex();
++        if (row < 0 || row >= static_cast<int>(tradeSequence_.size())) return;
++        tradeSequence_.erase(tradeSequence_.begin() + row);
++        SaveTradeSequence();
++        RefreshTradeSequenceList();
++        if (!tradeSequence_.empty()) {
++            const int next = std::min(row, static_cast<int>(tradeSequence_.size()) - 1);
++            ListView_SetItemState(tradeSeqList_, next, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
++            LoadTradeSequenceRowToEditor(next);
++        }
++    }
++
++    void MoveTradeSequenceRow(int delta) {
++        const int row = SelectedTradeSequenceIndex();
++        if (row < 0) return;
++        const int next = row + delta;
++        if (next < 0 || next >= static_cast<int>(tradeSequence_.size())) return;
++        std::swap(tradeSequence_[static_cast<std::size_t>(row)], tradeSequence_[static_cast<std::size_t>(next)]);
++        SaveTradeSequence();
++        RefreshTradeSequenceList();
++        ListView_SetItemState(tradeSeqList_, next, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
++        ListView_EnsureVisible(tradeSeqList_, next, FALSE);
++        LoadTradeSequenceRowToEditor(next);
++    }
++
++    void SaveTradeSequenceRowFromEditor() {
++        const int row = SelectedTradeSequenceIndex();
++        if (row < 0 || row >= static_cast<int>(tradeSequence_.size())) return;
++        TradeSequenceStep& step = tradeSequence_[static_cast<std::size_t>(row)];
++        LRESULT target = SendMessageW(tradeSeqTarget_, CB_GETCURSEL, 0, 0);
++        LRESULT kind = SendMessageW(tradeSeqKind_, CB_GETCURSEL, 0, 0);
++        step.target = target == 1 ? 1 : 0;
++        step.kind = kind == 1 ? 1 : 0;
++        if (step.kind == 1) step.target = 1;
++        step.description = GetText(tradeSeqDesc_);
++        step.delayMs = std::clamp(_wtoi(GetText(tradeSeqDelay_).c_str()), 50, 60000);
++        step.repeat = std::clamp(_wtoi(GetText(tradeSeqRepeat_).c_str()), 1, 999);
++        SaveTradeSequence();
++        RefreshTradeSequenceList();
++        ListView_SetItemState(tradeSeqList_, row, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
++        LoadTradeSequenceRowToEditor(row);
++    }
++
++    void BeginTradeSequenceCapture() {
++        const int row = SelectedTradeSequenceIndex();
++        if (row < 0 || row >= static_cast<int>(tradeSequence_.size())) {
++            Log(L"Chuỗi GD: chưa chọn dòng để lấy tọa độ."); return;
++        }
++        SaveTradeSequenceRowFromEditor();
++        TradeSequenceStep& step = tradeSequence_[static_cast<std::size_t>(row)];
++        Account* target = TradeSequenceTargetAccount(step);
++        if (!target) {
++            Log(L"Chuỗi GD: thiếu acc đích để lấy tọa độ (MAIN hoặc CON)."); return;
++        }
++        captureSlot_ = ClickSlot::None;
++        captureMacroIndex_ = -1;
++        captureTradeSelectChildPid_ = 0;
++        captureTradeSequenceIndex_ = row;
++        capturePid_ = target->game.pid;
++        LogAccount(*target, L"Chuỗi GD dòng " + std::to_wstring(row + 1) + L": đưa chuột vào nút rồi nhấn F8.");
++    }
++
++    void TestTradeSequenceRow() {
++        const int row = SelectedTradeSequenceIndex();
++        if (row < 0 || row >= static_cast<int>(tradeSequence_.size())) return;
++        SaveTradeSequenceRowFromEditor();
++        TradeSequenceStep& step = tradeSequence_[static_cast<std::size_t>(row)];
++        Account* target = TradeSequenceTargetAccount(step);
++        if (!target || !step.point.valid) { Log(L"TEST chuỗi GD: thiếu acc đích hoặc tọa độ."); return; }
++        POINT point{}; std::wstring error;
++        if (!ScaleClickPoint(target->game, step.point, point, error) || !RealInputClick(*target, point, error)) {
++            LogAccount(*target, L"TEST chuỗi GD FAIL: " + error); return;
++        }
++        LogAccount(*target, L"TEST chuỗi GD dòng " + std::to_wstring(row + 1) + L" PASS • REAL INPUT chiếm chuột.");
++    }
++
++    void BuildTradeEditorUi(HWND parent) {
++        auto addColumn = [&](int index, int width, const wchar_t* text) {
++            LVCOLUMNW c{}; c.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
++            c.pszText = const_cast<wchar_t*>(text); c.cx = width; c.iSubItem = index;
++            ListView_InsertColumn(tradeSeqList_, index, &c);
++        };
++        MakeIn(parent, L"STATIC", L"CHUỖI CLICK GIAO DỊCH — thực thi tuần tự, mỗi lần chỉ một cửa sổ được cầm chuột", 0, 15, 10, 850, 23, 0);
++        tradeSeqList_ = MakeIn(parent, WC_LISTVIEWW, L"", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER, 15, 38, 850, 235, IDC_SEQ_LIST);
++        ListView_SetExtendedListViewStyle(tradeSeqList_, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
++        addColumn(0, 38, L"#"); addColumn(1, 65, L"ACC"); addColumn(2, 95, L"Loại");
++        addColumn(3, 240, L"Mô tả"); addColumn(4, 210, L"Tọa độ"); addColumn(5, 80, L"Delay"); addColumn(6, 60, L"Lặp");
++
++        MakeIn(parent, L"STATIC", L"ACC:", 0, 15, 287, 38, 22, 0);
++        tradeSeqTarget_ = MakeIn(parent, WC_COMBOBOXW, L"", CBS_DROPDOWNLIST, 55, 282, 105, 150, IDC_SEQ_TARGET);
++        SendMessageW(tradeSeqTarget_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"MAIN"));
++        SendMessageW(tradeSeqTarget_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"CON đang chọn"));
++        SendMessageW(tradeSeqTarget_, CB_SETCURSEL, 0, 0);
++        MakeIn(parent, L"STATIC", L"Loại:", 0, 170, 287, 40, 22, 0);
++        tradeSeqKind_ = MakeIn(parent, WC_COMBOBOXW, L"", CBS_DROPDOWNLIST, 212, 282, 120, 150, IDC_SEQ_KIND);
++        SendMessageW(tradeSeqKind_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"CLICK"));
++        SendMessageW(tradeSeqKind_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"CHUYỂN ĐỒ"));
++        SendMessageW(tradeSeqKind_, CB_SETCURSEL, 0, 0);
++        MakeIn(parent, L"STATIC", L"Mô tả:", 0, 342, 287, 50, 22, 0);
++        tradeSeqDesc_ = MakeIn(parent, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL, 394, 282, 250, 27, IDC_SEQ_DESC);
++        MakeIn(parent, L"STATIC", L"Delay ms:", 0, 652, 287, 62, 22, 0);
++        tradeSeqDelay_ = MakeIn(parent, L"EDIT", L"500", WS_BORDER | ES_NUMBER | ES_CENTER, 716, 282, 62, 27, IDC_SEQ_DELAY);
++        MakeIn(parent, L"STATIC", L"Lặp:", 0, 786, 287, 34, 22, 0);
++        tradeSeqRepeat_ = MakeIn(parent, L"EDIT", L"1", WS_BORDER | ES_NUMBER | ES_CENTER, 822, 282, 43, 27, IDC_SEQ_REPEAT);
++
++        MakeIn(parent, L"BUTTON", L"+ THÊM", BS_PUSHBUTTON, 15, 323, 90, 30, IDC_SEQ_ADD);
++        MakeIn(parent, L"BUTTON", L"- XÓA", BS_PUSHBUTTON, 112, 323, 80, 30, IDC_SEQ_DELETE);
++        MakeIn(parent, L"BUTTON", L"LÊN", BS_PUSHBUTTON, 199, 323, 70, 30, IDC_SEQ_UP);
++        MakeIn(parent, L"BUTTON", L"XUỐNG", BS_PUSHBUTTON, 276, 323, 75, 30, IDC_SEQ_DOWN);
++        MakeIn(parent, L"BUTTON", L"LƯU DÒNG", BS_PUSHBUTTON, 360, 323, 105, 30, IDC_SEQ_SAVE);
++        MakeIn(parent, L"BUTTON", L"LẤY TỌA (F8)", BS_PUSHBUTTON, 474, 323, 125, 30, IDC_SEQ_CAPTURE);
++        MakeIn(parent, L"BUTTON", L"TEST DÒNG", BS_PUSHBUTTON, 608, 323, 105, 30, IDC_SEQ_TEST);
++        MakeIn(parent, L"BUTTON", L"ĐÓNG", BS_PUSHBUTTON, 775, 323, 90, 30, IDC_SEQ_CLOSE);
++        MakeIn(parent, L"STATIC", L"CHUYỂN ĐỒ luôn chạy trên CON và tự giới hạn số click theo số ô trống còn lại của MAIN.", 0, 15, 365, 850, 23, 0);
++        RefreshTradeSequenceList();
++    }
++
++    void OpenTradeSequenceEditor() {
++        if (tradeEditor_ && IsWindow(tradeEditor_)) {
++            ShowWindow(tradeEditor_, SW_SHOW); SetForegroundWindow(tradeEditor_); return;
++        }
++        WNDCLASSEXW wc{}; wc.cbSiz
