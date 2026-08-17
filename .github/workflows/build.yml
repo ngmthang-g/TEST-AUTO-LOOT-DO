@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - agent/item-consolidator-v0.2.7-shared-child-trade-sequence
+      - agent/scratch-v027-source-export
   pull_request:
   workflow_dispatch:
 
@@ -16,6 +17,11 @@ jobs:
       - name: Rehydrate exact source through v0.2.7
         shell: pwsh
         run: .\tools\rehydrate_v159.ps1
+      - name: Export rehydrated v0.2.7 controller
+        uses: actions/upload-artifact@v4
+        with:
+          name: scratch-v027-controller-source
+          path: generated/donor159/src/controller.cpp
       - name: Configure x64
         run: cmake -S . -B build -A x64
       - name: Build Release
