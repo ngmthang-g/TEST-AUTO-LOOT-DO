@@ -3,6 +3,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $vendor = Join-Path $root 'vendor\donor159'
 $v022Vendor = Join-Path $root 'vendor\v022_patch_parts'
 $v023Vendor = Join-Path $root 'vendor\v023_patch_parts'
+$v024Vendor = Join-Path $root 'vendor\v024_patch_parts'
 $generated = Join-Path $root 'generated\donor159'
 $temp = Join-Path $root 'generated\_rehydrate'
 
@@ -96,4 +97,22 @@ Normalize-Lf $controller
 $v023ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
 if ($v023ControllerHash -ne '4f7069a0ae47b417a2a4ccf8da4bfd3d4019ae216d88e01070e51c7e0e085fe4') { throw "v0.2.3 controller SHA256 mismatch: $v023ControllerHash" }
 
-Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022=$v022ControllerHash v023patch=$v023PatchHash controller=$v023ControllerHash"
+$v024Archive = Join-Path $temp 'controller_v024_patch.tar.xz'
+Join-BinaryParts $v024Vendor 'part.*' $v024Archive
+$v024PatchHash = (Get-FileHash -Algorithm SHA256 $v024Archive).Hash.ToLowerInvariant()
+if ($v024PatchHash -ne '8152b1e579e89da2362eb4dd72170f951e151f5da67035d3c8c9af9524a12cb3') { throw "v0.2.4 patch archive SHA256 mismatch: $v024PatchHash" }
+$v024Dir = Join-Path $temp 'v024'
+New-Item -ItemType Directory -Force $v024Dir | Out-Null
+& tar.exe -xJf $v024Archive -C $v024Dir
+if ($LASTEXITCODE -ne 0) { throw 'Failed to extract v0.2.4 patch tar.xz' }
+$v024PatchFile = Join-Path $v024Dir 'controller_v024.patch'
+Push-Location $root
+try {
+    & git apply --whitespace=nowarn --directory=generated/donor159 $v024PatchFile
+    if ($LASTEXITCODE -ne 0) { throw 'git apply failed for v0.2.4 recorder/copy patch' }
+} finally { Pop-Location }
+Normalize-Lf $controller
+$v024ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
+if ($v024ControllerHash -ne 'f45b8969488ac5a59e773845a60f180499700f9ebd59fff905d9a4abe5d57959') { throw "v0.2.4 controller SHA256 mismatch: $v024ControllerHash" }
+
+Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022=$v022ControllerHash v023=$v023ControllerHash v024patch=$v024PatchHash controller=$v024ControllerHash"

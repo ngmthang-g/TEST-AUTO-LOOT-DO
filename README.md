@@ -1,42 +1,31 @@
-# Thần Long Item Consolidator v0.2.3
+# Thần Long Item Consolidator v0.2.4
 
-Windows x64, nền Clean Route v1.5.9. v0.2.3 biến **BỘ ĐIỀU PHỐI TRUNG TÂM (BĐPT)** thành cổng bắt buộc cho mọi click REAL INPUT và tách các chuỗi click khỏi giao diện chính.
+Tool Windows x64 điều phối 1 MAIN và tối đa 6 CON trên nền Clean Route v1.5.9. v0.2.4 giữ Central Arbiter v0.2.3 và bổ sung **REC recorder**, **sao chép nhiều dòng**, và **lấy 6 click từ acc khác**.
 
-## BĐPT là quyền lực trung tâm
-Mỗi action vật lý phải đi theo luồng: `request -> BĐPT kiểm quyền -> FREEZE ALL -> cấp lease chuột cho đúng acc -> foreground + SetCursorPos + SendInput -> RESULT OK/FAIL -> UNFREEZE ALL`.
+## REC trong chuỗi bán đồ / giao dịch
+Mở `CHUỖI CLICK BÁN ĐỒ`, `CHUỖI GD MAIN` hoặc `CHUỖI GD CONx`, sau đó bấm `REC`.
 
-Không account state machine nào được tự gọi REAL INPUT trực tiếp. Raw SendInput chỉ nằm trong routine nội bộ của BĐPT. Khi một click đang được cấp quyền, các account khác chỉ được refresh snapshot, không phát mutable action/click chen ngang.
+Trong khi REC:
+- BĐPT chuyển sang `RECORDING` và khóa mọi auto action/click để thao tác tự động không lọt vào bản ghi.
+- Người dùng tự click trong game. Recorder 10 ms chỉ nhận click trái nằm trong đúng cửa sổ game được phép.
+- Ở editor CON, click trên CON được ghi là bước CON; click trên MAIN tự trở thành/tham chiếu `MAIN #n` trong thư viện MAIN dùng chung.
 
-MAIN và CON đang tham gia một workflow giao dịch có thể bị HOLD xuyên transaction để giữ thứ tự nghiệp vụ; các acc khác vẫn được chạy giữa hai click lease. Vì vậy không còn freeze toàn bộ suốt cả chuỗi như v0.2.2.
+Bấm `DỪNG REC` để chuyển bản ghi thành **các dòng tọa độ bình thường**. Mỗi dòng vẫn sửa được ACC thực hiện, mô tả, tọa độ, delay, repeat, loại CLICK/CHUYỂN ĐỒ, xóa hoặc sắp xếp như trước. REC luôn thêm dòng mới vào cuối, không xóa chuỗi đang có.
 
-## Giao diện gọn theo role
-Các bảng tọa độ không nằm phơi trên màn hình chính. Chỉ hiện nút phù hợp với acc đang chọn:
+## Sao chép một hoặc nhiều dòng
+Danh sách bước bán và bước giao dịch hỗ trợ chọn nhiều bằng Ctrl/Shift. Bấm `SAO CHÉP`, sau đó `DÁN` để nhân nguyên một đoạn bước. Dán được thêm cuối chuỗi để không phá các MAIN reference đã tồn tại.
 
-- MAIN: `CHUỖI CLICK BÁN ĐỒ` và `CHUỖI GD MAIN`.
-- CON1..CON6: `CHUỖI GD CONx` và `Tọa chọn CON`.
-- Role chưa gán: không hiện các nút chuỗi role-specific.
+## Lấy 6 click từ acc đã có
+Ở mục `6 CLICK RIÊNG ACC`, bấm `LẤY 6 CLICK CỦA ACC...` rồi chọn client nguồn. Tool copy các tọa đã có của: Xác nhận ra map, Đầu thai, Auto, Đánh quái, Dừng Auto 1, Dừng Auto 2. Điểm nào nguồn chưa có sẽ không ghi đè điểm hiện tại.
 
-Bấm nút mới mở editor để thêm/xóa/đổi thứ tự/lấy F8/test dòng.
+## Central Arbiter vẫn là cổng bắt buộc
+Automation click vẫn đi theo: request -> BĐPT cấp lease -> FREEZE ALL -> foreground đúng PID -> SetCursorPos -> SendInput -> RESULT -> UNFREEZE. Khi REC đang chạy, BĐPT không cấp automation click lease.
 
-## MAIN trade sequence dùng chung
-`CHUỖI GD MAIN` là thư viện bước MAIN dùng chung cho mọi CON. Mỗi bước có tọa độ, delay, repeat và mô tả. Sửa một bước MAIN một lần thì mọi CON tham chiếu bước đó đều dùng cấu hình mới.
+## Rule nghiệp vụ giữ nguyên
+- MAIN `FreeBagSpace <= 6`: bán đồ ưu tiên tuyệt đối.
+- CON chỉ giao dịch khi FULL (`FreeBagSpace == 0`).
+- Nhiều CON FULL: CON1 -> CON2 -> ... -> CON6.
+- Route/death/revive/train recovery vẫn dùng nền Clean Route v1.5.9.
 
-## Chuỗi riêng của từng CON
-Mỗi CON có `childTradeSequence` riêng, lưu theo profile/RoleID. Mỗi dòng chọn một trong hai loại executor:
-
-- chính CON đó thực hiện click bằng tọa độ riêng của dòng; hoặc
-- `MAIN #n`: yêu cầu BĐPT chuyển quyền sang cửa sổ MAIN và chạy bước #n trong `CHUỖI GD MAIN` dùng chung.
-
-`CHUYỂN ĐỒ` chỉ chạy trên CON và vẫn bị giới hạn theo sức chứa còn lại của MAIN.
-
-## Logic túi và ưu tiên giữ nguyên
-- MAIN còn `<= 6` ô trống: Auto Sell ưu tiên tuyệt đối, không bắt đầu trade.
-- CON chỉ đủ điều kiện khi FULL, `FreeBagSpace == 0`.
-- Nhiều CON FULL: cố định `CON1 -> CON2 -> ... -> CON6`, không round-robin.
-- MAIN dùng route/recovery v1.5.9 về bãi trước; selected CON về sau.
-- Khi hai acc đã sẵn sàng, MAIN click tọa chọn CON rồi BĐPT chạy plan của CON từng bước.
-
-## REAL INPUT
-Runtime click dùng foreground đúng cửa sổ + `SetCursorPos` + `SendInput`. Chuột vật lý bị chiếm khi action được cấp lease. Nếu không đưa đúng cửa sổ target lên foreground thì action fail-closed.
-
-CI chỉ chứng minh build/checksum/test logic. Tọa độ UI và delay thật phải test trong game trước với 1 MAIN + 1 CON.
+## Runtime test nên làm
+Bắt đầu với MAIN + CON1. Test `REC` trên chuỗi MAIN, sau đó REC một chuỗi CON có click xen kẽ giữa CON1 và MAIN. Kiểm tra các dòng sau khi DỪNG REC, thử SAO CHÉP/DÁN, rồi mới bật workflow tự động.
