@@ -1,33 +1,96 @@
-name: build-remote-loot-poc
+name: build-item-consolidator-v029
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - agent/item-consolidator-v0.2.9-party-lock-f4
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  windows-x64:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
+      - name: Rehydrate exact source through v0.2.9
+        shell: pwsh
+        run: .\tools\rehydrate_v029.ps1
       - name: Configure x64
-        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
-
+        run: cmake -S . -B build -A x64
       - name: Build Release
         run: cmake --build build --config Release --parallel
-
+      - name: Route logic self-test
+        run: .\build\Release\route_logic_tests.exe
+      - name: Rotation logic self-test
+        run: .\build\Release\rotation_logic_tests.exe
+      - name: Exact trade scheduler self-test
+        run: .\build\Release\trade_logic_tests.exe
+      - name: Static v0.2.9 party-open / GD-lock / F4 audit
+        shell: pwsh
+        run: |
+          $c = Get-Content generated\donor159\src\controller.cpp -Raw
+          foreach ($required in @(
+            'TỌA TỔ ĐỘI',
+            'TradePartyX',
+            'TradePartyValid',
+            'tradePartyPoint_',
+            'BeginTradePartyCapture',
+            'TradePhase::OpenParty',
+            'MAIN mở TỔ ĐỘI tại TỌA GD',
+            'sau khi mở tổ đội',
+            'tradeRendezvousPhase',
+            'tradeRendezvousStopAttempts',
+            'GD LOCK',
+            'MaintainTradeRendezvousLock',
+            'MaintainTradePairRendezvousLock',
+            'StopPath + verify đứng yên',
+            'mainSellingInsideTrade',
+            'KHÔNG quay bãi train',
+            'DrainMainSell',
+            'GetAsyncKeyState(VK_F4)',
+            'HandlePauseHotkeySignal',
+            'pauseHotkeyRegistered_',
+            '350',
+            'freeBagSpace != 0',
+            'freeSlots >= tradeTxn_.childTargetFreeSlots',
+            'groupId',
+            'groupRepeat',
+            'childTradeSequence_{}',
+            'DỒN ĐỒ: BẬT',
+            'DỒN ĐỒ: TẮT',
+            'AcquireCoordinatorSequenceFreeze',
+            'ReleaseCoordinatorSequenceFreeze',
+            'CoordinatorClick',
+            'SetForegroundWindow',
+            'SetCursorPos',
+            'SendInput',
+            'mainSellThreshold_ = 6',
+            'childTriggerFreeSlots_ = 0'
+          )) {
+            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.9 token: $required" }
+          }
+          $tradeTravel = [regex]::Match($c, 'void BeginTradeRendezvousTravel[\s\S]*?bool TradeAccountStandingAtRendezvous').Value
+          if ([string]::IsNullOrWhiteSpace($tradeTravel)) { throw 'Cannot isolate trade rendezvous travel block' }
+          if ($tradeTravel -match 'trainRecoveryPhase|trainRecoveryTick|trainRecoveryStopAttempts') {
+            throw 'Trade rendezvous must not reuse trainRecovery state in v0.2.9'
+          }
+          if ($c -match 'EnsureChildTradeSequence') { throw 'per-CON runtime trade sequence must not return' }
+          if ($c -match 'tradeGlobalFreeze_') { throw 'obsolete whole-trade freeze must not return' }
+          if ($c -match 'roundRobinCursor_') { throw 'fixed CON1..CON6 priority required' }
+          $rawSend = ([regex]::Matches($c, 'SendInput\(')).Count
+          if ($rawSend -ne 2) { throw "Unexpected SendInput call count: $rawSend" }
+          Write-Host 'V0.2.9 PARTY OPEN / HARD GD LOCK / F4 FALLBACK STATIC AUDIT PASS'
       - name: Stage artifact
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item build/Release/RemoteLootProbe.exe dist/
-          Copy-Item build/Release/RemoteLootBridge.dll dist/
-          Copy-Item README.md dist/
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          New-Item -ItemType Directory -Force stage | Out-Null
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.9.exe
+          Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
+          Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
+          Copy-Item macros stage\macros -Recurse
+          Copy-Item docs\history\VERSION_v0.2.9.md stage\VERSION_v0.2.9.md
+      - uses: actions/upload-artifact@v4
         with:
-          name: RemoteLootPoC-v0.1.0-win-x64
-          path: dist/*
-          if-no-files-found: error
+          name: ThanLongItemConsolidator-v0.2.9-win-x64
+          path: stage

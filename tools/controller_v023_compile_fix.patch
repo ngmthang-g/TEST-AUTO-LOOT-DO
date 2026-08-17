@@ -1,0 +1,13 @@
+diff --git a/generated/donor159/src/controller.cpp b/generated/donor159/src/controller.cpp
+index 777678c..f06fd02 100644
+--- a/generated/donor159/src/controller.cpp
++++ b/generated/donor159/src/controller.cpp
+@@ -1944,7 +1944,7 @@ private:
+         return true;
+     }
+ 
+-    std::wstring TradeStepTargetLabel(const TradeSequenceStep& step) const {
++    std::wstring TradeStepTargetLabel(const TradeSequenceStep& step) {
+         if (tradeEditorMode_ == 1) return L"MAIN";
+         if (step.target == 1) return L"MAIN #" + std::to_wstring(step.mainRef + 1);
+         Account* child = AccountByPid(tradeEditorChildPid_);
