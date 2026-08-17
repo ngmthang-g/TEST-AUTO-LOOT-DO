@@ -21,6 +21,12 @@ function Join-BinaryParts([string]$dir, [string]$pattern, [string]$outPath) {
     } finally { $out.Dispose() }
 }
 
+function Normalize-Lf([string]$path) {
+    $text = [IO.File]::ReadAllText($path)
+    $text = $text.Replace("`r`n", "`n")
+    [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
+}
+
 $donorArchive = Join-Path $temp 'donor159_source.tar.xz'
 Join-BinaryParts (Join-Path $vendor 'source_parts') 'donor.part.*' $donorArchive
 $donorHash = (Get-FileHash -Algorithm SHA256 $donorArchive).Hash.ToLowerInvariant()
@@ -42,10 +48,7 @@ New-Item -ItemType Directory -Force $patchDir | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Failed to extract controller patch tar.xz' }
 
 $controller = Join-Path $generated 'src\controller.cpp'
-$text = [IO.File]::ReadAllText($controller)
-$text = $text.Replace("`r`n", "`n")
-[IO.File]::WriteAllText($controller, $text, [Text.UTF8Encoding]::new($false))
-
+Normalize-Lf $controller
 $patchFile = Join-Path $patchDir 'controller.patch'
 Push-Location $root
 try {
@@ -53,6 +56,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'git apply failed for v0.2.1 controller patch' }
 } finally { Pop-Location }
 
+# Git for Windows may apply checkout attributes/autocrlf while writing a patched file.
+# Normalize once more so verification is byte-stable across Windows/Linux.
+Normalize-Lf $controller
 $controllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
 if ($controllerHash -ne 'ddc2d55043fddd0525f2087d85afae9245364bded5f87cd06987dfed05515583') {
     throw "Patched controller SHA256 mismatch: $controllerHash"
