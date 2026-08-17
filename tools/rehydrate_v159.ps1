@@ -4,6 +4,7 @@ $vendor = Join-Path $root 'vendor\donor159'
 $v022Vendor = Join-Path $root 'vendor\v022_patch_parts'
 $v023Vendor = Join-Path $root 'vendor\v023_patch_parts'
 $v024Vendor = Join-Path $root 'vendor\v024_patch_parts'
+$v025Vendor = Join-Path $root 'vendor\v025_patch_parts'
 $generated = Join-Path $root 'generated\donor159'
 $temp = Join-Path $root 'generated\_rehydrate'
 
@@ -115,4 +116,23 @@ Normalize-Lf $controller
 $v024ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
 if ($v024ControllerHash -ne 'f45b8969488ac5a59e773845a60f180499700f9ebd59fff905d9a4abe5d57959') { throw "v0.2.4 controller SHA256 mismatch: $v024ControllerHash" }
 
-Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022=$v022ControllerHash v023=$v023ControllerHash v024patch=$v024PatchHash controller=$v024ControllerHash"
+
+$v025Archive = Join-Path $temp 'controller_v025_patch.tar.xz'
+Join-BinaryParts $v025Vendor 'part.*' $v025Archive
+$v025PatchHash = (Get-FileHash -Algorithm SHA256 $v025Archive).Hash.ToLowerInvariant()
+if ($v025PatchHash -ne 'a527a14346f7012c6719e802b099c07efa2a94225bee3c53f3c1f4e2906279eb') { throw "v0.2.5 patch archive SHA256 mismatch: $v025PatchHash" }
+$v025Dir = Join-Path $temp 'v025'
+New-Item -ItemType Directory -Force $v025Dir | Out-Null
+& tar.exe -xJf $v025Archive -C $v025Dir
+if ($LASTEXITCODE -ne 0) { throw 'Failed to extract v0.2.5 patch tar.xz' }
+$v025PatchFile = Join-Path $v025Dir 'controller_v025.patch'
+Push-Location $root
+try {
+    & git apply --whitespace=nowarn --directory=generated/donor159 $v025PatchFile
+    if ($LASTEXITCODE -ne 0) { throw 'git apply failed for v0.2.5 sell-freeze/editor/REC patch' }
+} finally { Pop-Location }
+Normalize-Lf $controller
+$v025ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
+if ($v025ControllerHash -ne '1771cb5ca6b4d1421c18cdb9d666c2f2bb1ac31db87c9671b691dd5f17f2daf1') { throw "v0.2.5 controller SHA256 mismatch: $v025ControllerHash" }
+
+Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022=$v022ControllerHash v023=$v023ControllerHash v024=$v024ControllerHash v025patch=$v025PatchHash controller=$v025ControllerHash"

@@ -1,31 +1,25 @@
-# Thần Long Item Consolidator v0.2.4
+# Thần Long Item Consolidator v0.2.5
 
-Tool Windows x64 điều phối 1 MAIN và tối đa 6 CON trên nền Clean Route v1.5.9. v0.2.4 giữ Central Arbiter v0.2.3 và bổ sung **REC recorder**, **sao chép nhiều dòng**, và **lấy 6 click từ acc khác**.
+Bản sửa tập trung vào 3 lỗi thực tế của v0.2.4: **FREEZE toàn chuỗi bán**, **editor chọn đúng dòng sau khi sao chép nhiều dòng**, và **REC tự dọn lease/transaction treo**.
 
-## REC trong chuỗi bán đồ / giao dịch
-Mở `CHUỖI CLICK BÁN ĐỒ`, `CHUỖI GD MAIN` hoặc `CHUỖI GD CONx`, sau đó bấm `REC`.
+## 1. MAIN chạy CHUỖI CLICK BÁN ĐỒ = FREEZE ALL suốt chuỗi
+BĐPT chỉ lấy `SEQUENCE LEASE` khi MAIN thật sự bước vào phase `CHUỖI CLICK BÁN ĐỒ`. Từ lúc đó đến khi dòng cuối cùng hoàn tất, tất cả acc khác bị FREEZE liên tục, kể cả thời gian delay giữa các dòng. MAIN giữ quyền chạy các bước của chính chuỗi bán.
 
-Trong khi REC:
-- BĐPT chuyển sang `RECORDING` và khóa mọi auto action/click để thao tác tự động không lọt vào bản ghi.
-- Người dùng tự click trong game. Recorder 10 ms chỉ nhận click trái nằm trong đúng cửa sổ game được phép.
-- Ở editor CON, click trên CON được ghi là bước CON; click trên MAIN tự trở thành/tham chiếu `MAIN #n` trong thư viện MAIN dùng chung.
+Không còn chu kỳ `FREEZE -> click -> UNFREEZE -> delay -> FREEZE` cho từng dòng bán. BĐPT chỉ UNFREEZE khi chuỗi bán hoàn tất, click lỗi/abort, người dùng dừng acc, hoặc REC chủ động lấy quyền cấu hình.
 
-Bấm `DỪNG REC` để chuyển bản ghi thành **các dòng tọa độ bình thường**. Mỗi dòng vẫn sửa được ACC thực hiện, mô tả, tọa độ, delay, repeat, loại CLICK/CHUYỂN ĐỒ, xóa hoặc sắp xếp như trước. REC luôn thêm dòng mới vào cuối, không xóa chuỗi đang có.
+## 2. Sửa editor sau khi SAO CHÉP nhiều dòng
+Multi-select vẫn dùng để SAO CHÉP. Nhưng dòng đang chỉnh giờ được xác định bằng **focused row** (dòng người dùng vừa click), không lấy selected row đầu tiên. Vì vậy chọn một dòng bất kỳ sau khi copy nhiều dòng sẽ nạp đúng ACC/Loại/Mô tả/Delay/Lặp của dòng đó.
 
-## Sao chép một hoặc nhiều dòng
-Danh sách bước bán và bước giao dịch hỗ trợ chọn nhiều bằng Ctrl/Shift. Bấm `SAO CHÉP`, sau đó `DÁN` để nhân nguyên một đoạn bước. Dán được thêm cuối chuỗi để không phá các MAIN reference đã tồn tại.
+Đặc biệt ở workflow CON: nếu dòng đang là `MAIN #n`, đổi ACC về CON sẽ nạp lại editor đúng dòng và mở lại Mô tả + `CLICK / CHUYỂN ĐỒ` để chỉnh.
 
-## Lấy 6 click từ acc đã có
-Ở mục `6 CLICK RIÊNG ACC`, bấm `LẤY 6 CLICK CỦA ACC...` rồi chọn client nguồn. Tool copy các tọa đã có của: Xác nhận ra map, Đầu thai, Auto, Đánh quái, Dừng Auto 1, Dừng Auto 2. Điểm nào nguồn chưa có sẽ không ghi đè điểm hiện tại.
+## 3. REC không còn mắc transaction/lease treo
+Khi người dùng DỪNG AUTO một acc đang thuộc workflow giao dịch, BĐPT AbortTrade và nhả HOLD ngay. Khi bấm REC, nếu vẫn còn transaction hoặc click lease cũ ở tầng điều phối thì REC thu hồi/dọn trạng thái treo trước khi vào RECORDING.
 
-## Central Arbiter vẫn là cổng bắt buộc
-Automation click vẫn đi theo: request -> BĐPT cấp lease -> FREEZE ALL -> foreground đúng PID -> SetCursorPos -> SendInput -> RESULT -> UNFREEZE. Khi REC đang chạy, BĐPT không cấp automation click lease.
+REC vẫn khóa automation trong lúc ghi và sau `DỪNG REC` vẫn chuyển click tay thành các dòng tọa độ editable như v0.2.4.
 
-## Rule nghiệp vụ giữ nguyên
-- MAIN `FreeBagSpace <= 6`: bán đồ ưu tiên tuyệt đối.
-- CON chỉ giao dịch khi FULL (`FreeBagSpace == 0`).
-- Nhiều CON FULL: CON1 -> CON2 -> ... -> CON6.
-- Route/death/revive/train recovery vẫn dùng nền Clean Route v1.5.9.
-
-## Runtime test nên làm
-Bắt đầu với MAIN + CON1. Test `REC` trên chuỗi MAIN, sau đó REC một chuỗi CON có click xen kẽ giữa CON1 và MAIN. Kiểm tra các dòng sau khi DỪNG REC, thử SAO CHÉP/DÁN, rồi mới bật workflow tự động.
+## Rule giữ nguyên
+- MAIN `FreeBagSpace <= 6`: bán đồ ưu tiên.
+- CON chỉ giao dịch khi FULL.
+- CON1 -> CON6 cố định.
+- REAL INPUT vẫn đi qua BĐPT.
+- Clean Route v1.5.9 route/death/revive foundation giữ nguyên.

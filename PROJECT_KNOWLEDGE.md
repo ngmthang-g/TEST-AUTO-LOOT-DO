@@ -1,18 +1,15 @@
-# PROJECT KNOWLEDGE — Item Consolidator v0.2.4
+# PROJECT KNOWLEDGE — v0.2.5
 
-## Central arbiter
-BĐPT là cổng bắt buộc cho physical automation click. Mỗi click tự động phải qua `CoordinatorClick`; lease chuột tạo FREEZE ALL ngắn, thực hiện REAL INPUT đúng PID, nhận OK/FAIL rồi UNFREEZE. Không khôi phục background PostMessage.
+## Persistent sell sequence lease
+`coordinatorSequenceFreeze_` + `coordinatorSequenceOwnerPid_` là lease riêng cho chuỗi bán. Nó khác transient click lease. Khi MAIN ở sellPhase 6, `AcquireCoordinatorSequenceFreeze` đặt `coordinatorInputFreeze_=true` và giữ nguyên qua mọi delay/click. Chỉ owner PID được TickAccount; các acc khác bị freeze. `CoordinatorClick` của owner không unfreeze sau từng click.
 
-## Recorder
-`RecorderMode` gồm Sell / TradeMain / TradeChild. REC là input-assist, không phải runtime macro engine. Khi `coordinatorRecording_` bật, account state machines và trade scheduler không được cấp action; `CoordinatorClick` từ chối automation click. Timer `kRecordTimer=2` chạy 10 ms, poll `GetAsyncKeyState(VK_LBUTTON)` và chỉ lưu click release nằm trong game window được phép.
+Lease được release khi macro bán hết dòng, click fail/abort, StopAccount owner, hoặc REC takeover.
 
-DỪNG REC chuyển buffer thành các `SellMacroStep` / `TradeSequenceStep` bình thường và append cuối chuỗi. Delay được suy ra từ khoảng thời gian giữa click. TradeChild nhận cả child PID và MAIN role. MAIN click dùng `FindSharedMainStepByPoint`; exact saved ClickPoint được tái sử dụng, nếu chưa có thì tạo shared MAIN step mới.
+## Editor focus invariant
+Multi-selection chỉ phục vụ copy. Dòng chỉnh sửa phải lấy từ `FocusedSelectedRow`, ưu tiên `LVNI_FOCUSED` đang selected rồi mới fallback selected đầu tiên. WM_NOTIFY trade editor nạp chính `NMLISTVIEW::iItem` vừa được selected. Sell editor cũng ép focus vào item vừa click trước khi load form.
 
-## Multi-row copy
-Sell/trade step list hỗ trợ multi-select. Clipboard là in-memory cấu trúc step, không phải raw text. Paste append cuối chuỗi. Trade clipboard giữ mode để MAIN không bị dán nhầm sang CON; CON clipboard có thể tái dùng giữa các CON.
+## REC takeover
+StopChecked aborts active trade if stopped account is MAIN/CON participant. StartRecorder can recover stale coordinatorInputBusy_, abort a hanging trade transaction, and release a persistent sequence lease before enabling `coordinatorRecording_`.
 
-## Six click clone
-`CopySixClicksFromAnotherAccount` copy từng ClickPoint hợp lệ từ client nguồn hiện đang được scan. Invalid source point không overwrite target. BaseW/BaseH được giữ để ScaleClickPoint scale sang cửa sổ đích.
-
-## Existing business rules
-MAIN sell threshold default 6; sell if freeBagSpace <= threshold. CON eligible only full. Fixed CON1..CON6 priority. MAIN/CON prep and Clean Route v1.5.9 death/revive/route foundation remain unchanged.
+## Existing invariants
+MAIN <=6 sell priority; FULL-only CON; fixed CON1..CON6; role-specific sequence editors; shared MAIN trade coordinates; REC/manual coordinate input; BĐPT mandatory REAL INPUT backend.
