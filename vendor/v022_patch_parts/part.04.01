@@ -1,0 +1,51 @@
+ L"GD chuẩn bị • CON đang tắt auto/về bãi train";
++            activeChild->runtime.status = L"ĐIỀU PHỐI • CON đang tắt auto/về bãi";
+             if (activeChild->runtime.trainRecoveryPhase == 0 && TradeAccountStandingReady(*activeChild) && TradeAccountStandingReady(*activeMain)) {
+                 std::wstring reason;
+-                if (!TradeMacroPairExists(tradeTxn_.childSlot, reason)) { AbortTrade(reason, now); return; }
+-                // Atomic boundary requested by user: from this exact point until ConfirmMain completes,
+-                // every other gameplay automation is frozen. Read-only snapshots still refresh.
+-                tradeGlobalFreeze_ = true;
+-                if (!BeginTradeMacro(TradePhase::Invite, *activeMain, "trade_invite_" + std::to_string(tradeTxn_.childSlot))) {
+-                    AbortTrade(L"không mở được macro chọn CON/giao dịch", now); return;
++                if (!activeChild->profile.tradeSelectPoint.valid) {
++                    AbortTrade(L"CON" + std::to_wstring(tradeTxn_.childSlot) + L" chưa gán TỌA CHỌN CON trên cửa sổ MAIN", now); return;
+                 }
+-                LogAccount(*activeMain, L"GD ATOMIC LOCK • MAIN + CON đứng cạnh nhau • click tọa chọn CON " + std::to_wstring(tradeTxn_.childSlot) + L" rồi chạy chuỗi giao dịch.");
+-                SetTradeStatus(L"GD LOCK: MAIN ← CON " + std::to_wstring(tradeTxn_.childSlot) + L" • đóng băng automation khác");
++                if (!TradeSequenceReady(reason)) { AbortTrade(L"chuỗi click GD chưa sẵn sàng: " + reason, now); return; }
++                POINT selectPoint{};
++                if (!ScaleClickPoint(activeMain->game, activeChild->profile.tradeSelectPoint, selectPoint, reason) ||
++                    !RealInputClick(*activeMain, selectPoint, reason)) {
++                    AbortTrade(L"MAIN click chọn CON FAIL: " + reason, now); return;
++                }
++                tradeTxn_.phase = TradePhase::SelectChild;
++                tradeTxn_.sequenceDueTick = GetTickCount() + 500;
++                SetTradeStatus(L"MAIN đã click tọa chọn CON" + std::to_wstring(tradeTxn_.childSlot) + L" • chuẩn bị chuỗi GD");
+             }
+             return;
+         }
+-
+-        // During the atomic macro chain, do NOT preempt for death/map-confirm/revive.
+-        // Those states remain observable and will be handled immediately after FinishTrade releases the freeze.
+-        if (tradeTxn_.phase != TradePhase::Idle) {
++        if (tradeTxn_.phase == TradePhase::SelectChild) {
++            if (!activeMain || !activeChild) { AbortTrade(L"mất acc sau khi chọn CON", now); return; }
++            if (tradeTxn_.sequenceDueTick != 0 && static_cast<LONG>(now - tradeTxn_.sequenceDueTick) < 0) return;
++            tradeTxn_.phase = TradePhase::Sequence;
++            tradeTxn_.sequenceIndex = 0;
++            tradeTxn_.sequenceRepeatDone = 0;
++            tradeTxn_.sequenceDueTick = 0;
++            SetTradeStatus(L"MAIN ↔ CON" + std::to_wstring(tradeTxn_.childSlot) + L" • bắt đầu chuỗi click giao dịch");
++            return;
++        }
++        if (tradeTxn_.phase == TradePhase::Sequence) {
+             if (!activeMain || !activeChild) { AbortTrade(L"mất acc trong chuỗi giao dịch", now); return; }
+-            Account* target = AccountByPid(static_cast<DWORD>(tradeTxn_.targetPid));
+-            if (!target || !IsWindow(target->game.window)) { AbortTrade(L"mất cửa sổ đích trong macro", now); return; }
+-            const std::wstring phase = AsciiToWide(tradeTxn_.macroName);
+-            activeMain->runtime.status = L"GD LOCK với CON " + std::to_wstring(tradeTxn_.childSlot) + L" • " + phase;
+-            activeChild->runtime.status = L"GD LOCK → MAIN • " + phase;
+-            const RunResult r = tradeRunner_.Tick(target->game.window, now, backgroundClicker_);
+-            if (r == RunResult::Failed) { AbortTrade(L"macro " + phase + L" FAIL: " + tradeRunner_.Error(), now); return; }
+-            if (r == RunR

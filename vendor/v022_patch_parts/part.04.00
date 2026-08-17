@@ -1,0 +1,54 @@
+AccountByPid(tradeTxn_.childPid);
+ 
+-        // Preparation is NOT the atomic trade chain yet. Only MAIN + selected CON are held;
+-        // other accounts may continue ordinary 1.5.9 automation until both stand still at train.
++        // v0.2.2: physical cursor is a single shared resource. The whole transaction owns it
++        // from MAIN preparation through the last trade click. All other gameplay actions are frozen.
+         if (tradeTxn_.phase == TradePhase::PrepareMain) {
+             if (!activeMain || !activeChild || !IsWindow(activeMain->game.window) || !IsWindow(activeChild->game.window)) {
+                 AbortTrade(L"mất cửa sổ/acc khi chuẩn bị MAIN", now); return;
+             }
+-            // Before the atomic boundary we still obey authoritative state changes.
+-            // A dead/transitioning pair must be released so donor 1.5.9 can recover it first.
+             if (!TradePairReadyForPreparation(*activeMain, *activeChild)) {
+-                AbortTrade(L"state MAIN/CON đổi trong lúc chuẩn bị; trả quyền cho core 1.5.9", now); return;
++                AbortTrade(L"state MAIN/CON đổi khi chuẩn bị MAIN", now); return;
+             }
+             if (activeMain->snapshot.freeBagSpace <= mainSellThreshold_) {
+-                AbortTrade(L"MAIN chạm ngưỡng bán ≤" + std::to_wstring(mainSellThreshold_) + L" ô trong lúc chuẩn bị", now); return;
+-            }
+-            if (activeChild->snapshot.freeBagSpace > 0) {
+-                AbortTrade(L"CON không còn FULL trong lúc chuẩn bị", now); return;
++                AbortTrade(L"MAIN chạm ngưỡng bán ≤" + std::to_wstring(mainSellThreshold_) + L" ô", now); return;
+             }
++            if (activeChild->snapshot.freeBagSpace > 0) { AbortTrade(L"CON không còn FULL", now); return; }
++            SetTradeStatus(L"đang điều phối MAIN • tắt AutoFight → chạy về bãi train");
+             (void)HandleTrainRecovery(*activeMain, now);
+-            activeMain->runtime.status = L"GD chuẩn bị • MAIN đang tắt auto/về bãi train";
++            activeMain->runtime.status = L"ĐIỀU PHỐI • MAIN đang tắt auto/về bãi";
+             if (activeMain->runtime.trainRecoveryPhase == 0 && TradeAccountStandingReady(*activeMain)) {
+                 BeginTradeReturnToTrain(*activeChild, now, L"CON");
+                 tradeTxn_.phase = TradePhase::PrepareChild;
+-                SetTradeStatus(L"GD: MAIN đã đứng im đúng bãi • đưa CON " + std::to_wstring(tradeTxn_.childSlot) + L" về bãi");
++                SetTradeStatus(L"MAIN đã đứng đúng bãi • đang tắt auto CON" + std::to_wstring(tradeTxn_.childSlot));
+             }
+             return;
+         }
+@@ -1919,66 +2337,72 @@ private:
+                 AbortTrade(L"mất cửa sổ/acc khi chuẩn bị CON", now); return;
+             }
+             if (!TradePairReadyForPreparation(*activeMain, *activeChild)) {
+-                AbortTrade(L"state MAIN/CON đổi trong lúc chuẩn bị CON; trả quyền cho core 1.5.9", now); return;
++                AbortTrade(L"state MAIN/CON đổi khi chuẩn bị CON", now); return;
+             }
+             if (activeMain->snapshot.freeBagSpace <= mainSellThreshold_) {
+-                AbortTrade(L"MAIN chạm ngưỡng bán ≤" + std::to_wstring(mainSellThreshold_) + L" ô trong lúc chuẩn bị", now); return;
+-            }
+-            if (activeChild->snapshot.freeBagSpace > 0) {
+-                AbortTrade(L"CON không còn FULL trong lúc chuẩn bị", now); return;
++                AbortTrade(L"MAIN chạm ngưỡng bán ≤" + std::to_wstring(mainSellThreshold_) + L" ô", now); return;
+             }
++            if (activeChild->snapshot.freeBagSpace > 0) { AbortTrade(L"CON không còn FULL", now); return; }
++            SetTradeStatus(L"đang điều phối CON" + std::to_wstring(tradeTxn_.childSlot) + L" • tắt AutoFight → chạy về bãi train");
+             (void)HandleTrainRecovery(*activeChild, now);
+-            activeChild->runtime.status =

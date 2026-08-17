@@ -1,75 +1,78 @@
-# PROJECT KNOWLEDGE
+# PROJECT KNOWLEDGE — ThanLong Item Consolidator
 
-## Project Identity
-- Name: RemoteLoot PoC
-- Repository: `ngmthang-g/TEST-AUTO-LOOT-DO`
-- Primary branch: `main`
-- Current version: `v0.1.0`
-- Platform: Windows x64, native C++20/CMake
-- Runtime state: `RUNTIME UNTESTED`
+## Current development version
+v0.2.2 — REAL INPUT + Central Coordinator. Donor behavior remains Clean Route v1.5.9 for death/revive/route/train recovery.
 
-## Project Goal
-Prove one narrow question before building a larger tool: **can the frozen Thần Long client/server accept semantic loot interaction/pickup while the local character remains farther away than the built-in normal pickup flow?**
+## User-confirmed runtime finding
+Background `PostMessage` click from v0.2.1 does not operate reliably in the live game. v0.2.2 intentionally restores physical mouse input from donor 1.5.9: foreground game window + SetCursorPos + SendInput.
 
-## Current State
-### Source implemented
-- process discovery via loaded `GameAssembly.dll`;
-- per-PID shared-memory controller/bridge protocol;
-- `WH_GETMESSAGE` bridge injected on the target window thread;
-- IL2CPP export/class/method discovery by semantic names;
-- read-only Unity `SynchronizationContext` validation;
-- read-only loot API signature dump;
-- read-only nearest-pack probe when `GetNearestItemPack` is zero-arg at runtime;
-- one-shot `ClickToObject(RoleID)` test with no PoC movement call;
-- one-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call;
-- read-only `HasBuff(30008009)` test.
+## Architecture invariant
+There is one master tool and one central coordinator. Loaded MAIN/CON windows are branches/resources of that coordinator, not independent automations competing for the physical mouse.
 
-### Runtime-confirmed working
-None yet.
+Only one account/action path may own REAL INPUT at a time. A trade transaction takes the global action/mouse lock from MAIN preparation until the final configured trade click completes.
 
-### Built but runtime-untested
-All v0.1.0 behavior until CI/runtime evidence says otherwise.
+## Account roles
+- OFF
+- MAIN
+- CON1..CON6
 
-## Hard Rules
-1. This repository is an **independent RemoteLoot proof tool**, not a branch of Auto Train/Auto Sell.
-2. Do not add automatic movement to remote pickup tests.
-3. Do not add auto-loop/spam until one-shot server acceptance is established.
-4. Do not claim direct remote pickup PASS from a successful method invocation alone.
-5. PASS requires concrete runtime state: character stays put, target pack changes/disappears, bag/item state changes correctly, and no disconnect/crash.
-6. A crash/disconnect can be an execution-boundary failure and must not be silently interpreted as server rejection.
-7. Càn Khôn Hồ mechanism remains UNKNOWN. Only the built-in `HasBuff(30008009)` skip guard is VERIFIED from shipped source.
-8. Do not broad reverse-engineer the client. Use the canonical knowledge repo first and only investigate exact missing facts.
+Roles persist by RoleID.
 
-## Verified Client Facts Used
-From canonical knowledge:
-- `Game.GetNearestItemPack(...)` / `Game.GetNearbyItemPack(...)` exist for item-pack discovery.
-- item packs expose at least `Type`, `RoleID`, `Position` in shipped Lua.
-- normal shipped auto pickup uses `MoveToEx` when distance >100, then `ClickToObject(RoleID)`.
-- shipped pick-all is `Game.PickUpItemFromItemPack(itemPackID,-1,1)`.
-- built-in auto pickup skips while `Game.HasBuff(30008009)` and mentions Càn Khôn Hồ.
+Each CON profile also stores `TradeSelectX/Y/W/H`: the point MAIN must click to select that specific CON before the trade sequence begins. The point is captured against MAIN's client rectangle but belongs logically to the CON profile.
 
-## Important Unknowns
-- Is `ItemPack.RoleID` identical to the `itemPackID` expected by direct pickup in all runtime cases?
-- Does server accept direct pickup when farther than normal pickup range and buff 30008009 is absent?
-- Does server acceptance change when buff 30008009 is present?
-- Does Càn Khôn Hồ use this same request path or a separate server-driven subsystem?
-- Is direct invocation from the validated message-hook context stable enough for this one-shot proof on the target build?
+## Authoritative bag rules
+- MAIN `FreeBagSpace <= 6` => sell priority; do not start a new CON trade.
+- CON eligible only when `FreeBagSpace == 0`.
+- Multiple FULL CONs => fixed priority CON1 -> CON2 -> ... -> CON6.
+- No round robin.
 
-## Current Test Order
-1. Validate Unity managed context.
-2. Resolve exact runtime loot method signatures.
-3. Scan nearest pack if signature is supported.
-4. Record buff 30008009 absent/present.
-5. At >100 distance, test `ClickToObject(RoleID)` with no movement call.
-6. At >100 distance, test `PickUpItemFromItemPack(candidate,-1,1)` with no movement call.
-7. Record pack/bag/movement/disconnect result.
-8. Repeat under the opposite Càn Khôn Hồ buff state.
+## Preparation flow
+1. Coordinator chooses the highest-priority FULL CON.
+2. Global transaction/mouse ownership is acquired.
+3. MAIN uses donor 1.5.9 train recovery to stop AutoFight and return to its selected train target.
+4. Only after MAIN is standing ready does selected CON do the same.
+5. Both must be alive/stable/at train target with route/fight stopped.
+6. MAIN performs REAL INPUT click at selected CON's saved `tradeSelectPoint`.
+7. Trade click sequence begins.
 
-## Evidence Index
-- `EVID-001`: canonical shipped Lua/API knowledge establishes normal loot flow and direct semantic pickup call.
-- Runtime evidence for v0.1.0: pending user test.
+## Trade click sequence editor
+The old `NẠP MACRO` button merely reloaded manually edited `.macro` files. It is not the primary v0.2.2 workflow.
 
-## Decisions
-- `DEC-001`: keep v0.1.0 one-shot and movement-free.
-- `DEC-002`: refuse to guess unsupported runtime signatures; print them and stop that probe.
-- `DEC-003`: if remote pickup passes, production implementation must use a proper action gate/MainThread dispatcher/state proof rather than preserving PoC shortcuts.
+`CHUỖI CLICK GD` stores an ordered vector of steps in INI section `[TradeSequence]`.
+
+Each step contains:
+- target: MAIN or selected CON;
+- kind: normal CLICK or CHUYỂN ĐỒ;
+- description;
+- scaled click point X/Y/baseW/baseH;
+- delay after click;
+- repeat count.
+
+Editor actions: add, delete, move up/down, save row, capture F8, test row.
+
+CHUYỂN ĐỒ is forced to CON and dynamically capped so MAIN is not intentionally filled below its sell reserve.
+
+## REAL INPUT contract
+Runtime click path intentionally uses:
+- SetForegroundWindow
+- BringWindowToTop
+- SetCursorPos
+- SendInput LEFTDOWN/LEFTUP
+
+If the intended game window cannot become foreground, fail closed rather than clicking the wrong window.
+
+The cursor is intentionally occupied during actions. Other tool actions must not execute concurrently.
+
+## Central status UI
+The GUI prominently exposes `BỘ ĐIỀU PHỐI TRUNG TÂM` and a master status line. Expected messages describe ownership and phase, e.g. MAIN prep, CON2 prep, mouse -> MAIN, MAIN <-> CON2 step N/M.
+
+Per-account rows remain for identity, role, bag/map/position and branch status.
+
+## Legacy compatibility
+`MacroLibrary`, BackgroundClicker and `macros/` may remain in source/package for historical compatibility, but active v0.2.2 trade orchestration uses the visual TradeSequence + REAL INPUT path. Do not reintroduce `trade_invite_N` as an active dependency without an explicit design decision.
+
+## Build integrity
+CI rehydrates the exact v1.5.9 donor, applies the verified v0.2.1 patch/compile fix, verifies the known v0.2.1 controller hash, then assembles and applies the v0.2.2 patch. Final controller hash must match the recorded v0.2.2 SHA before compilation.
+
+## Runtime proof still required
+A green CI build does not prove live game click geometry/timing. First live proof should use 1 MAIN + 1 CON: capture selector point, build a minimal trade sequence, test individual rows, then test one fully coordinated transaction before scaling to more CONs.

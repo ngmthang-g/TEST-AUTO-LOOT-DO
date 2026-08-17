@@ -1,190 +1,75 @@
-# RemoteLoot PoC v0.1.0
+# Thần Long Item Consolidator v0.2.2
 
-Mục tiêu duy nhất của repo này là **xác định server/client chấp nhận hành vi nhặt bọc nào khi nhân vật đứng xa**. Đây chưa phải Auto Loot hoàn chỉnh.
+Tool Windows x64 điều phối 1 acc MAIN và tối đa 6 acc CON trên nền Clean Route v1.5.9.
 
-## Trạng thái hiện tại
+## Thay đổi quan trọng v0.2.2
 
-- Source: `BUILD PASS`.
-- GitHub Actions Windows x64: `CI PASS` cho code commit `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e` (run #8 / `31941065682`).
-- Runtime game/server: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN` cho tới khi có test thật.
+### 1. Quay lại REAL INPUT chiếm chuột
+Background `PostMessage` đã không click được ổn định trong game thực tế. v0.2.2 quay lại cơ chế input của donor 1.5.9:
 
-## Căn cứ VERIFIED từ knowledge base
+`SetForegroundWindow -> BringWindowToTop -> SetCursorPos -> SendInput LEFTDOWN/LEFTUP`
 
-Client đã có semantic loot API:
+Vì chuột vật lý là tài nguyên dùng chung, **BỘ ĐIỀU PHỐI TRUNG TÂM** chỉ cho một cửa sổ game thao tác tại một thời điểm. Tool không cố click đồng thời nhiều acc.
 
-- `Game.GetNearestItemPack(...)` / `Game.GetNearbyItemPack(...)`
-- `Game.ClickToObject(RoleID)`
-- `Game.PickUpItemFromItemPack(itemPackID, slotIndex, UsingAuto)`
-- built-in pick-all: `Game.PickUpItemFromItemPack(itemPackID, -1, 1)`
-- built-in auto loot bình thường: nếu khoảng cách > 100 thì `MoveToEx(...)` rồi mới `ClickToObject(...)`
-- built-in auto pickup bị skip khi `Game.HasBuff(30008009)` và source hiển thị thông báo Càn Khôn Hồ.
+### 2. Tool chính + các acc là nhánh
+Phía trên danh sách acc có dòng trạng thái điều phối tổng. Ví dụ:
 
-Điểm **chưa VERIFIED** là server có chấp nhận direct pickup ở xa khi không có Càn Khôn Hồ hay không. PoC này tồn tại để trả lời đúng câu đó.
+`ĐIỀU PHỐI: MAIN đang tắt Auto/về bãi -> CON2 đang về bãi -> chuột -> MAIN -> MAIN <-> CON2 bước 3/7`
 
-## Thiết kế PoC
+Mỗi acc bên dưới vẫn có trạng thái riêng nhưng quyền thực hiện action thuộc coordinator trung tâm.
 
-PoC gồm 2 file x64:
+### 3. Gán tọa độ chọn từng CON
+Chọn một acc đã gán vai trò `CON1..CON6`, sau đó bấm **LẤY F8** ở mục `Tọa chọn CON`.
 
-- `RemoteLootProbe.exe` — controller console độc lập.
-- `RemoteLootBridge.dll` — `WH_GETMESSAGE` hook cực nhỏ chạy trên window thread của game và gọi IL2CPP semantic API.
+- Tool yêu cầu MAIN tồn tại.
+- Đưa chuột tới vị trí nhân vật CON tương ứng trên cửa sổ MAIN.
+- Nhấn F8.
+- Tọa độ được lưu vào profile của CON theo RoleID, kèm kích thước client để scale khi cửa sổ thay đổi.
+- Nút **TEST** dùng REAL INPUT để thử click tọa độ đó trên MAIN.
 
-Không có:
+Khi CON đó FULL, sau khi MAIN và CON đã đứng đúng bãi train, MAIN sẽ click tọa độ này để chọn CON rồi mới chạy chuỗi giao dịch.
 
-- Auto Train.
-- Auto Sell.
-- vòng lặp auto loot.
-- OCR/pixel scan.
-- `MoveTo` / `MoveToEx` trong các test remote.
-- danh sách 90 action hoặc spam request.
+### 4. CHUỖI CLICK GD thay cho NẠP MACRO
+`NẠP MACRO` ở v0.2.1 chỉ có nghĩa là đọc lại các file `macros/*.macro` mà người dùng tự sửa bằng Notepad. Nó không phải chức năng ghi thao tác.
 
-Mỗi lệnh mutable là **one-shot** do người test bấm tay.
+v0.2.2 dùng nút **CHUỖI CLICK GD**. Cửa sổ editor cho phép:
 
-> PoC gọi semantic action trực tiếp từ validated Unity `SynchronizationContext` hook để giảm biến số khi test server acceptance. Đây **không phải** kiến trúc action engine production cuối cùng. Nếu direct pickup PASS, bản tool thật phải quay về ActionGate/MainThread dispatcher + state proof chuẩn.
+- `+ THÊM` bước click;
+- `- XÓA` bước;
+- `LÊN / XUỐNG` đổi thứ tự;
+- chọn bước chạy trên `MAIN` hoặc `CON đang được giao dịch`;
+- loại `CLICK` hoặc `CHUYỂN ĐỒ`;
+- mô tả bước;
+- delay sau click;
+- số lần lặp;
+- `LẤY TỌA (F8)`;
+- `TEST DÒNG` bằng REAL INPUT;
+- `LƯU DÒNG`.
 
-## Build
+Loại `CHUYỂN ĐỒ` luôn chạy trên CON và số lần click thực tế còn bị giới hạn theo sức chứa an toàn còn lại của MAIN.
 
-GitHub Actions tự build Windows x64 và upload artifact:
+## Logic điều phối
 
-`RemoteLootPoC-v0.1.0-win-x64`
+1. Snapshot đọc tất cả acc.
+2. Nếu MAIN còn `<= 6` ô trống -> ưu tiên bán đồ, không bắt đầu giao dịch.
+3. CON chỉ đủ điều kiện khi `FreeBagSpace == 0`.
+4. Nếu nhiều CON FULL -> ưu tiên cố định `CON1 -> CON2 -> ... -> CON6`.
+5. Coordinator khóa quyền action/chuột cho transaction được chọn.
+6. MAIN tắt đánh và dùng route/recovery của Clean Route 1.5.9 để về bãi train đã tick.
+7. Sau khi MAIN đứng đúng bãi, CON được chọn mới tắt đánh và về bãi.
+8. Khi cả hai đã đứng im đúng vị trí, MAIN click tọa độ chọn CON đã lưu.
+9. Coordinator chạy từng dòng của `CHUỖI CLICK GD`; trước mỗi dòng nó đưa đúng cửa sổ MAIN/CON lên foreground rồi mới click.
+10. Trong transaction, các action khác không được chen vào giành chuột.
+11. Chuỗi hoàn tất -> nhả quyền chuột -> core 1.5.9 xử lý các state tiếp theo.
 
-Artifact chứa:
+## Lưu ý khi dùng REAL INPUT
 
-- `RemoteLootProbe.exe`
-- `RemoteLootBridge.dll`
-- `README.md`
+Trong lúc tool đang thao tác, chuột sẽ bị di chuyển và cửa sổ game sẽ được đưa lên foreground. Đây là chủ đích của v0.2.2 để đổi lấy độ tin cậy click. Không nên sử dụng chuột thủ công chen vào giữa chuỗi đang chạy.
 
-Build local:
+## Macro folder
 
-```powershell
-cmake -S . -B build -A x64
-cmake --build build --config Release
-```
+Thư mục `macros/` vẫn được đóng gói để giữ tương thích/lịch sử v0.2.1, nhưng **luồng giao dịch v0.2.2 không phụ thuộc các file `trade_invite_*.macro` nữa**. Cấu hình chính nằm trong GUI `CHUỖI CLICK GD` và được lưu vào INI.
 
-Sau build, để `RemoteLootProbe.exe` và `RemoteLootBridge.dll` cùng một thư mục.
+## Trạng thái kiểm thử
 
-## Chạy
-
-1. Mở game và đăng nhập nhân vật.
-2. Chạy `RemoteLootProbe.exe` cùng mức quyền với game. Nếu game chạy Administrator thì probe cũng chạy Administrator.
-3. Chọn PID game.
-4. Probe tự chạy:
-   - `Validate Unity managed context`;
-   - `Resolve/print loot API signatures`.
-5. Tạo một bọc đồ trên đất và đứng **xa hơn khoảng nhặt bình thường**.
-6. Tắt Auto pickup của game.
-7. Test theo thứ tự bên dưới.
-
-## Test A — scanner
-
-Menu `3`:
-
-`Scan nearest ItemPack`
-
-Nếu method runtime đúng dạng PoC hỗ trợ, tool in `RoleID` của bọc gần nhất và giữ nó làm candidate `itemPackID`.
-
-Nếu runtime signature khác, PoC **không đoán tham số**; log sẽ in exact signature và trả `SIGNATURE_UNSUPPORTED`.
-
-## Test B — remote ClickToObject
-
-Menu `4`:
-
-```text
-Game.ClickToObject(ItemPack.RoleID)
-```
-
-PoC tuyệt đối không gọi `MoveTo`/`MoveToEx` trước hoặc sau lệnh này.
-
-### PASS có ý nghĩa khi
-
-- nhân vật không chạy lại gần;
-- pack-content lifecycle hoặc pickup response xuất hiện;
-- game không disconnect/crash;
-- kết quả lặp lại được.
-
-### FAIL
-
-- không có phản ứng;
-- server từ chối;
-- chỉ hoạt động khi ở gần;
-- disconnect/crash/exception.
-
-Disconnect/crash **không tự động chứng minh server từ chối**; có thể là execution-boundary/re-entrancy failure. Log phải được giữ lại.
-
-## Test C — direct pickup all ở xa
-
-Menu `5`:
-
-```text
-Game.PickUpItemFromItemPack(itemPackID, -1, 1)
-```
-
-Không có movement call.
-
-PoC tự đọc `GetFreeBagSpace()` trước/sau và rescan pack làm bằng chứng phụ. Lưu ý: số ô trống không đổi **không đủ kết luận FAIL** nếu vật phẩm được cộng dồn vào stack đang có.
-
-### DIRECT REMOTE PICKUP = PASS chỉ khi
-
-Cùng một test condition cho thấy:
-
-- nhân vật vẫn đứng nguyên vị trí;
-- bọc mục tiêu biến mất hoặc contents của nó giảm đúng;
-- tay nải/item state thay đổi đúng;
-- không disconnect/crash;
-- có thể lặp lại ở nhiều bọc.
-
-Nếu PASS khi **buff 30008009 ABSENT**, giả thuyết mạnh nhất là khoảng cách >100 trong shipped Auto chỉ là client-side policy hoặc server cho phép semantic pickup từ xa trong phạm vi AOI.
-
-Nếu FAIL khi buff absent nhưng PASS khi buff present, server nhiều khả năng có entitlement/state check liên quan Càn Khôn Hồ.
-
-Nếu cả direct pickup lẫn ClickToObject đều không phải cơ chế khi buff present, cần chuyển sang nghiên cứu targeted subsystem của Càn Khôn Hồ; không broad reverse client.
-
-## Test D — Càn Khôn Hồ
-
-Menu `6` gọi:
-
-```text
-Game.HasBuff(30008009)
-```
-
-Chạy lại cùng test B/C ở hai trạng thái:
-
-1. `ABSENT`
-2. `PRESENT`
-
-Không thay đổi điều kiện khác nếu có thể.
-
-## Test E — ô trống tay nải
-
-Menu `7` gọi read-only:
-
-```text
-Game.GetFreeBagSpace()
-```
-
-Dùng để đối chiếu trước/sau pickup, không dùng một mình làm bằng chứng thành công/thất bại.
-
-## Bảng ghi kết quả cần gửi lại
-
-```text
-Game PID:
-ValidateContext: PASS/FAIL
-Loot API signatures:
-ScanNearestPack: PASS/FAIL
-Distance: gần / >100 / rất xa trong AOI
-Buff 30008009: ABSENT/PRESENT
-ClickToObject: PASS/FAIL + hiện tượng
-DirectPickupAll: PASS/FAIL + hiện tượng
-Nhân vật có di chuyển: YES/NO
-Pack biến mất: YES/NO
-Bag thay đổi: YES/NO
-Disconnect/crash: YES/NO
-Log detail:
-```
-
-## Evidence status v0.1.0
-
-- Source/CI: `BUILD PASS / CI PASS`.
-- Runtime: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN` cho tới khi có test thật.
-- Càn Khôn Hồ mechanism: `UNKNOWN`; buff 30008009 skip guard là VERIFIED, nhưng cơ chế nhặt riêng của nó chưa được chứng minh.
+CI/compile chứng minh cấu trúc build và unit/static tests. Việc click đúng UI giao dịch, tọa độ thật và delay thật vẫn phải kiểm chứng trong game với 1 MAIN + 1 CON trước khi mở rộng 6 acc.

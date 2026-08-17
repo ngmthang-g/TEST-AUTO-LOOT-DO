@@ -1,0 +1,36 @@
+POINT screen = clientPoint;
++        if (!ClientToScreen(a.game.window, &screen)) { error = L"ClientToScreen thất bại"; return false; }
++        const DWORD selfTid = GetCurrentThreadId();
++        bool attachedGame = false;
++        if (a.game.threadId != 0 && a.game.threadId != selfTid) {
++            attachedGame = AttachThreadInput(selfTid, a.game.threadId, TRUE) != FALSE;
++        }
++        (void)SetForegroundWindow(a.game.window);
++        (void)BringWindowToTop(a.game.window);
++        Sleep(kMouseSettleMs);
++        if (GetForegroundWindow() != a.game.window) {
++            if (attachedGame) AttachThreadInput(selfTid, a.game.threadId, FALSE);
++            error = L"Không đưa được đúng acc lên foreground; chặn click để tránh bấm nhầm"; return false;
++        }
++        if (!SetCursorPos(screen.x, screen.y)) {
++            if (attachedGame) AttachThreadInput(selfTid, a.game.threadId, FALSE);
++            error = L"SetCursorPos thất bại"; return false;
++        }
++        Sleep(kMouseSettleMs);
++        INPUT down{}; down.type = INPUT_MOUSE; down.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
++        if (SendInput(1, &down, sizeof(INPUT)) != 1) {
++            if (attachedGame) AttachThreadInput(selfTid, a.game.threadId, FALSE);
++            error = L"SendInput LEFTDOWN thất bại"; return false;
++        }
++        Sleep(kMouseHoldMs);
++        INPUT up{}; up.type = INPUT_MOUSE; up.mi.dwFlags = MOUSEEVENTF_LEFTUP;
++        if (SendInput(1, &up, sizeof(INPUT)) != 1) {
++            if (attachedGame) AttachThreadInput(selfTid, a.game.threadId, FALSE);
++            error = L"SendInput LEFTUP thất bại"; return false;
++        }
++        Sleep(kMouseAfterMs);
++        if (attachedGame) AttachThreadInput(selfTid, a.game.threadId, FALSE);
+         const DWORD clickedAt = GetTickCount();
+         a.runtime.lastRealInputTick = clickedAt;
+         globalLastRealInputTick_ = clickedAt;
++        // Deliberately keep game foreground and leave cursor at the click point: temporary mouse-lock mode req

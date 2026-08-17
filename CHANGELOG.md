@@ -1,34 +1,37 @@
 # CHANGELOG
 
-## [v0.1.0] - 2026-08-16
+## v0.2.2 — REAL INPUT + Central Coordinator
 
-### Requested
-- Build a very small independent RemoteLoot PoC to determine which loot action the server accepts at distance.
-- Prioritize proof of direct remote pickup before building a complete tool.
+### Changed
+- Reverted runtime click path from background PostMessage to donor-style foreground physical mouse input: SetForegroundWindow + SetCursorPos + SendInput.
+- Made the coordinator the single owner of the physical mouse/action channel; trade lock now begins before MAIN preparation.
+- Promoted master coordinator state to a visible top-level GUI status line.
+- Replaced the normal `NẠP MACRO` workflow with `CHUỖI CLICK GD` visual editor.
 
-### Added / Changed
-- Windows x64 C++ controller and injected `WH_GETMESSAGE` bridge.
-- Runtime IL2CPP semantic resolver for loot APIs.
-- Unity managed-context validation.
-- Nearest ItemPack probe when runtime signature is supported without guessing.
-- One-shot `ClickToObject(RoleID)` test with no PoC movement call.
-- One-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call.
-- `HasBuff(30008009)` Càn Khôn Hồ state probe.
-- `GetFreeBagSpace()` before/after auxiliary pickup proof plus nearest-pack rescan.
-- GitHub Actions Windows x64 build/artifact workflow.
-- Project knowledge and runtime test procedure.
+### Added
+- Per-CON MAIN-side selector coordinate persisted by RoleID.
+- F8 capture and TEST button for each CON selector coordinate.
+- Visual ordered trade-step editor with MAIN/CON target, CLICK/CHUYỂN ĐỒ type, description, delay, repeat, F8 capture, row test, add/delete/up/down/save.
+- Dynamic CHUYỂN ĐỒ repeat cap based on MAIN safe remaining capacity.
+- Explicit coordinator phase/status messages showing which account owns the mouse and which trade step is running.
 
-### Build
-- Final code commit tested by CI: `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e`.
-- GitHub Actions run: `#8` / run ID `31941065682`.
-- Final: `BUILD PASS` / `CI PASS` on Windows x64.
-- Artifact workflow packages `RemoteLootProbe.exe`, `RemoteLootBridge.dll`, and README.
+### Preserved from v0.2.1
+- Exact Clean Route v1.5.9 death/revive/route foundation.
+- MAIN `FreeBagSpace <= 6` sell priority.
+- CON eligible only at `FreeBagSpace == 0`.
+- Fixed CON1 -> CON6 priority; no round robin.
+- MAIN prepares/returns to train target before selected CON.
 
-### Runtime
-- Status: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN`.
-- Càn Khôn Hồ remote-loot mechanism: `UNKNOWN`.
+### Compatibility
+- Legacy macros directory remains packaged for history/backward compatibility, but active v0.2.2 trade flow no longer depends on `trade_invite_*.macro` files.
 
-### Next Version Notes
-- Do not add automation loops yet.
-- First collect repeatable runtime evidence for distant `ClickToObject` and direct pick-all with buff 30008009 absent/present.
+### Runtime status
+- Source/build validation is automated in CI.
+- Live game coordinate/timing and full one-MAIN/one-CON transaction remain runtime test items.
+
+## v0.2.1 — Exact Trade Logic
+- MAIN <=6 sell priority.
+- CON FULL-only eligibility.
+- Fixed CON1..CON6 priority.
+- Exact v1.5.9 train recovery preparation.
+- Atomic trade freeze after preparation.

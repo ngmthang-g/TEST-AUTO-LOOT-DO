@@ -1,0 +1,151 @@
+, 276, 90, 20, 0));
++        tradeSelectPointLabel_ = Make(L"STATIC", L"chọn một CON", SS_LEFT | SS_CENTERIMAGE | WS_BORDER, 630, 273, 230, 24, 0); addFont(tradeSelectPointLabel_);
++        addFont(Make(L"BUTTON", L"LẤY F8", BS_PUSHBUTTON, 866, 273, 75, 24, IDC_TRADE_SELECT_CAPTURE));
++        addFont(Make(L"BUTTON", L"TEST", BS_PUSHBUTTON, 947, 273, 56, 24, IDC_TRADE_SELECT_TEST));
+ 
+         addFont(Make(L"STATIC", L"SETTING RIÊNG ACC", 0, 18, 290, 150, 20, 0));
+         addFont(Make(L"STATIC", L"Bãi:", 0, 18, 316, 45, 22, 0));
+@@ -1084,7 +1147,7 @@ private:
+         confirmInterval_ = Make(L"EDIT", L"5", WS_BORDER | ES_NUMBER | ES_CENTER, 448, 346, 42, 27, IDC_CONFIRM_INTERVAL); addFont(confirmInterval_);
+         addFont(Make(L"STATIC", L"giây", 0, 494, 350, 32, 22, 0));
+         enableFight_ = Make(L"BUTTON", L"AUTO → Đánh quái", BS_AUTOCHECKBOX, 530, 347, 145, 24, IDC_ENABLE_FIGHT); addFont(enableFight_);
+-        addFont(Make(L"STATIC", L"BACKGROUND CLICK: không chiếm chuột/focus • F8 chỉ dùng lúc lấy tọa độ", 0, 680, 350, 343, 22, 0));
++        addFont(Make(L"STATIC", L"REAL INPUT CHIẾM CHUỘT • coordinator chỉ cho từng acc thao tác lần lượt", 0, 680, 350, 343, 22, 0));
+ 
+         addFont(Make(L"STATIC", L"XOAY BÃI TRAIN — tick các bãi muốn chạy vòng; thứ tự theo danh sách bãi chung", 0, 18, 382, 1005, 20, 0));
+         rotationList_ = Make(WC_LISTVIEWW, L"", LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER,
+@@ -1576,6 +1639,8 @@ private:
+         }
+         captureSlot_ = ClickSlot::None;
+         captureMacroIndex_ = index;
++        captureTradeSelectChildPid_ = 0;
++        captureTradeSequenceIndex_ = -1;
+         capturePid_ = a->game.pid;
+         LogAccount(*a, L"Đang chờ F8 cho macro bán dòng " + std::to_wstring(index + 1));
+         SetText(selected_, L"LẤY TỌA ĐỘ MACRO DÒNG " + std::to_wstring(index + 1) + L" • đưa chuột vào game rồi F8");
+@@ -1690,6 +1755,313 @@ private:
+         maxTransferClicks_ = std::clamp(maxTransferClicks_, 1, 90);
+     }
+ 
++    void LoadTradeSequence() {
++        tradeSequence_.clear();
++        int count = ReadIniInt(L"TradeSequence", L"Count", 0);
++        count = std::clamp(count, 0, 64);
++        for (int i = 0; i < count; ++i) {
++            TradeSequenceStep step{};
++            const std::wstring prefix = L"Step_" + std::to_wstring(i) + L"_";
++            step.target = std::clamp(ReadIniInt(L"TradeSequence", prefix + L"Target", 0), 0, 1);
++            step.kind = std::clamp(ReadIniInt(L"TradeSequence", prefix + L"Kind", 0), 0, 1);
++            step.description = ReadIniText(L"TradeSequence", prefix + L"Desc");
++            step.point.x = ReadIniInt(L"TradeSequence", prefix + L"X", -1);
++            step.point.y = ReadIniInt(L"TradeSequence", prefix + L"Y", -1);
++            step.point.baseW = ReadIniInt(L"TradeSequence", prefix + L"W", 0);
++            step.point.baseH = ReadIniInt(L"TradeSequence", prefix + L"H", 0);
++            step.point.valid = step.point.x >= 0 && step.point.y >= 0 && step.point.baseW > 0 && step.point.baseH > 0;
++            step.delayMs = std::clamp(ReadIniInt(L"TradeSequence", prefix + L"Delay", 500), 50, 60000);
++            step.repeat = std::clamp(ReadIniInt(L"TradeSequence", prefix + L"Repeat", 1), 1, 999);
++            if (step.kind == 1) step.target = 1;
++            tradeSequence_.push_back(step);
++        }
++    }
++
++    void SaveTradeSequence() {
++        EnsureUnicodeIni();
++        WriteIniInt(L"TradeSequence", L"Count", static_cast<int>(tradeSequence_.size()));
++        for (std::size_t i = 0; i < tradeSequence_.size(); ++i) {
++            const TradeSequenceStep& step = tradeSequence_[i];
++            const std::wstring prefix = L"Step_" + std::to_wstring(i) + L"_";
++            WriteIniInt(L"TradeSequence", prefix + L"Target", step.target);
++            WriteIniInt(L"TradeSequence", prefix + L"Kind", step.kind);
++            WriteIniText(L"TradeSequence", prefix + L"Desc", step.description);
++            WriteIniInt(L"TradeSequence", prefix + L"X", step.point.valid ? step.point.x : -1);
++            WriteIniInt(L"TradeSequence", prefix + L"Y", step.point.valid ? step.point.y : -1);
++            WriteIniInt(L"TradeSequence", prefix + L"W", step.point.valid ? step.point.baseW : 0);
++            WriteIniInt(L"TradeSequence", prefix + L"H", step.point.valid ? step.point.baseH : 0);
++            WriteIniInt(L"TradeSequence", prefix + L"Delay", step.delayMs);
++            WriteIniInt(L"TradeSequence", prefix + L"Repeat", step.repeat);
++        }
++        FlushIni();
++    }
++
++    bool TradeSequenceReady(std::wstring& reason) const {
++        if (tradeSequence_.empty()) { reason = L"chưa có bước click giao dịch"; return false; }
++        for (std::size_t i = 0; i < tradeSequence_.size(); ++i) {
++            const TradeSequenceStep& step = tradeSequence_[i];
++            if (!step.point.valid) {
++                reason = L"bước " + std::to_wstring(i + 1) + L" chưa lấy tọa độ";
++                return false;
++            }
++        }
++        return true;
++    }
++
++    static std::wstring TradeStepTargetLabel(const TradeSequenceStep& step) {
++        return step.target == 0 ? L"MAIN" : L"CON";
++    }
++
++    static std::wstring TradeStepKindLabel(const TradeSequenceStep& step) {
++        return step.kind == 1 ? L"CHUYỂN ĐỒ" : L"CLICK";
++    }
++
++    void RefreshTradeSequenceList() {
++        if (!tradeSeqList_) return;
++        ListView_DeleteAllItems(tradeSeqList_);
++        for (std::size_t i = 0; i < tradeSequence_.size(); ++i) {
++            const TradeSequenceStep& step = tradeSequence_[i];
++            std::wstring idx = std::to_wstring(i + 1);
++            LVITEMW item{};
++            item.mask = LVIF_TEXT;
++            item.iItem = static_cast<int>(i);
++            item.pszText = idx.data();
++            ListView_InsertItem(tradeSeqList_, &item);
++            const std::array<std::wstring, 6> cols = {{
++                TradeStepTargetLabel(step), TradeStepKindLabel(step),
++                step.description.empty() ? L"(không mô tả)" : step.description,
++                PointDescription(step.point), std::to_wstring(step.delayMs), std::to_wstring(step.repeat)
++            }};
++            for (int col = 0; col < 6; ++col) {
++                ListView_SetItemText(tradeSeqList_, static_cast<int>(i), col + 1,
++                                     const_cast<wchar_t*>(cols[static_cast<std::size_t>(col)].c_str()));
++            }
++        }
++    }
++
++    int SelectedTradeSequenceIndex() const {
++        if (!tradeSeqList_) return -1;
++        return ListView_GetNextItem(tradeSeqList_, -1, LVNI_SELECTED);
++    }
++
++    Account* TradeEditorRepresentativeChild() {
++        if (Account* selected = SelectedAccount(); selected && selected->profile.tradeRole >= 2) return selected;
++        if (tradeTxn_.childPid != 0) {
++            if (Account* active = AccountByPid(tradeTxn_.childPid)) return active;
++        }
++        for (int role = 2; role <= 7; ++role) {
++            if (Account* child = AccountByTradeRole(role)) return child;
++        }
++        return nullptr;
++    }
++
++    Account* TradeSequenceTargetAccount(const TradeSequenceStep& step) {
++        if (step.target == 0) return AccountByTradeRole(1);
++        return TradeEditorRepresentativeChild();
++    }
++
++    void LoadTradeSequenceRowToEditor(int index) {
++        if (index < 0 || index >= static_cast<int>(tradeSequence_.size())) return;
++        const TradeSequenceStep& step = tradeSequence_[static_cast<std::size_t>(index)];
++        if (tradeSeqTarget_) SendMessageW(tradeSeqTarget_, CB_SETCURSEL, step.target, 0);
++        if (tradeSeqKind_) SendMessageW(tradeSeqKind_, CB_SETCURSEL, step.kind, 0);
++        SetText(tradeSeqDesc_, step.description);
++        SetText(tradeSeqDelay_, std::to_wstring(step.delayMs));
++        SetText(tradeSeqRepeat_, std::to_wstring(step.repeat));
++    }
++
++    void AddTradeSequenceRow() {
++        TradeSequenceStep step{};
++        step.target = 0;
++        step.kind = 0;
++        step.description = L"Bước click mới";
++        step.delayMs = 500;
++        step.rep
