@@ -1,30 +1,31 @@
 # BUG REGISTRY
 
-## BUG-R2-001 — Trade preparation used old training target instead of one trade rendezvous
-- Status: FIXED-BUILD-PENDING-CI
+## BUG-R2-001 — Trade preparation used training target rather than one trade rendezvous
+- Status: FIXED-BUILD / RUNTIME UNTESTED
 - First Observed: clean v0.2.7 source inspection
-- Last Known-Good: UNKNOWN
-- Root Cause: trade preparation reused normal train recovery/target state.
-- Fix: dedicated global TỌA GD and `tradeTravel*` state.
+- Root Cause: active trade preparation reused normal train recovery/target semantics.
+- Fix: global TỌA GD + dedicated `tradeTravel*` state + both-arrived gate.
 - Runtime Verified In: UNKNOWN
-- Next Diagnostic Step: full CON while MAIN/CON are on different maps.
 
-## BUG-R2-002 — Per-CON trade selection coordinate is unnecessary configuration
-- Status: REMOVED
+## BUG-R2-002 — Unneeded per-CON trade selector coordinate
+- Status: REMOVED / RUNTIME UNTESTED
 - First Observed: user request v0.2.7-R2
-- Root Cause: clean coordinator required `tradeSelectPoint`.
-- Fix: all UI/persistence/capture/runtime references removed.
-- Do-Not-Do: do not silently restore per-CON selector coordinates.
+- Fix: remove `tradeSelectPoint`, `TradeSelect*` UI/persistence/runtime.
+- Do-Not-Do: do not silently restore it.
 
-## BUG-R2-003 — AutoFight stop retries could block movement forever
-- Status: FIXED-BUILD-PENDING-CI
-- First Observed: source inspection
-- Root Cause: terminal retry states returned “chờ thủ công”.
-- Fix: continue route after retry limit; on map change, retry stop and continue.
-- Runtime Verified In: UNKNOWN.
+## BUG-R2-003 — AutoFight-stop retry could permanently block requested movement
+- Status: FIXED-BUILD / RUNTIME UNTESTED
+- Root Cause: terminal retry paths entered manual wait.
+- Fix: bounded attempts, continue movement, retry around map changes/destination.
 
-## BUG-R2-004 — DỒN ĐỒ OFF could theoretically leave stale future rendezvous hold state after R2 additions
-- Status: FIXED-BUILD-PENDING-CI
-- Root Cause: new dedicated state needs explicit cleanup.
-- Fix: `ReleaseTradeHolds()` scans held accounts and resets rendezvous state.
-- Runtime Verified In: UNKNOWN.
+## BUG-R2-004 — New rendezvous HOLD could survive OFF/abort without explicit cleanup
+- Status: FIXED-BUILD / RUNTIME UNTESTED
+- Fix: `ReleaseTradeHolds()` clears all held accounts and trade travel state.
+
+## BUG-R2-005 — First R2 edit accidentally removed untouched clean helper functions
+- Status: FIXED-BUILD / RUNTIME UNTESTED
+- First Observed: CI #56 BUILD FAILED
+- Error: `PeriodicConfirmBusy` and `HandleFightClicks` identifier not found.
+- Root Cause: deletion range around old StopAuto1 code was too broad.
+- Fix: restore both helper definitions byte-for-byte from exact clean v0.2.7; CI #57 then BUILD/CI PASS.
+- Do-Not-Do: do not rewrite unrelated helpers while editing adjacent click slots.

@@ -1,29 +1,38 @@
-# Thần Long Item Consolidator v0.2.7
+# Thần Long Item Consolidator v0.2.7-R2
 
-Windows x64. v0.2.7 đơn giản hóa cấu hình giao dịch: từ nhiều workflow CON riêng thành đúng **2 bộ dữ liệu dùng chung**.
+Windows x64. **Nền code duy nhất: exact v0.2.7 sạch** (`controller.cpp` SHA256 `397f1cf0...`). R2 không lấy code từ v0.2.8/v0.2.9 cũ.
 
-## 1. CHUỖI GD MAIN
-- Là thư viện tọa độ MAIN dùng chung cho mọi giao dịch.
-- Các dòng MAIN #n chỉ cần sửa một lần.
+## DỒN ĐỒ
+- Clean v0.2.7 đã có toggle thật: OFF chặn trade coordinator, abort transaction và quay về auto-train/bán độc lập.
+- R2 giữ cơ chế đó và bổ sung dọn sạch mọi `tradeHeld` + state TỌA GD mới khi OFF/abort.
+- ON vẫn giữ MAIN `freeBagSpace <= 6` ưu tiên bán và CON chỉ được chọn lúc FULL chính xác `freeBagSpace == 0`, ưu tiên CON1→CON6.
 
-## 2. CHUỖI GD ACC CON
-- Chỉ còn **một workflow global duy nhất** cho CON1 -> CON6.
-- Không còn `CHUỖI GD CON1`, `CON2`, ... riêng.
-- Khi BĐPT chọn MAIN giao dịch với CONn, mọi dòng `ACC CON` trong workflow sẽ chạy trên đúng cửa sổ CONn đang active.
-- Dòng tham chiếu `MAIN #n` vẫn chạy trên MAIN, vì workflow giao dịch có thể cần xen kẽ MAIN -> CON -> MAIN.
-- `CHUYỂN ĐỒ` luôn là thao tác của active CON.
+## TỌA GD global
+- Chọn một acc đang đứng đúng điểm muốn giao dịch → bấm `TỌA GD • LẤY` để lưu Map/X/Y global.
+- Khi CON FULL: BĐPT HOLD **MAIN + CON ngay lập tức**, StopPath đường về bãi cũ, thử tắt AutoFight và cho cả hai cùng đi TỌA GD.
+- Acc tới trước bị giữ tại điểm, không được auto-train/AutoPath về bãi cũ.
+- Chỉ khi snapshot xác nhận **cả MAIN và CON đều tới TỌA GD** mới chạy chuỗi giao dịch có sẵn.
+- Nếu đang fallback và đổi map, tool check/retry tắt AutoFight rồi tiếp tục route; không treo vĩnh viễn chỉ vì AutoFight chưa tắt được.
 
-## REC / sửa chuỗi
-- Mở `CHUỖI GD ACC CON` từ bất kỳ CON nào. CON đang chọn chỉ là cửa sổ donor để REC/LẤY TỌA/TEST.
-- Tọa CON ghi được dùng cho toàn bộ CON1..CON6 và vẫn scale theo BaseW/BaseH.
-- REC vẫn có thể ghi xen kẽ click trên CON donor và MAIN; click MAIN được ánh xạ về thư viện `CHUỖI GD MAIN`.
+## Nhóm lặp trong CHUỖI GD ACC CON
+- Chọn 1/2/3/... dòng **liên tiếp**.
+- Nhập `Lặp nhóm`, bấm `GOM DÒNG ĐÃ CHỌN`.
+- Mini-sequence đó chạy đủ N vòng rồi mới đi tiếp chuỗi lớn.
+- `BỎ NHÓM` xóa group của các dòng chọn.
+- Repeat từng dòng cũ vẫn giữ nguyên.
 
-## Migration từ v0.2.6
-Nếu chưa có section global `ChildTradeSequence`, v0.2.7 tự migrate một lần:
-1. ưu tiên workflow cũ của CON có slot thấp nhất đang tồn tại (CON1 -> CON6),
-2. nếu không có thì dùng template legacy cũ,
-3. lưu thành `ChildTradeSequence` global.
+## Bỏ tọa độ gán riêng cho CON
+Toàn bộ active UI/persistence/runtime `tradeSelectPoint` / `TradeSelect*` đã bị xóa. Không còn tọa riêng CON1..CON6.
 
-Dữ liệu per-CON cũ vẫn được giữ trong profile để tương thích/rollback nhưng **không còn được runtime dùng**.
+## AUTO / DỪNG AUTO
+- 6 click riêng giảm còn **5 click**.
+- Click cũ `AUTO` (#3) và `DỪNG AUTO 1` (#5) cùng một điểm nên R2 chỉ giữ slot `AUTO`.
+- Tắt fight dùng `AUTO → DỪNG AUTO 2`.
 
-DỒN ĐỒ BẬT/TẮT, auto-train độc lập khi OFF, chuỗi bán, FREEZE ALL xuyên suốt chuỗi bán, BĐPT, REC, 6 click riêng, route/map/revive và donor Clean Route v1.5.9 giữ nguyên.
+## F4 — PROTECTED
+`ToggleGlobalPause()` và `RegisterHotKey(...VK_F4)` giữ nguyên từ clean v0.2.7. Rehydrate wrapper so sánh exact block và FAIL nếu bị thay đổi.
+
+## Không thay đổi
+Shared `CHUỖI GD MAIN` + một global `CHUỖI GD ACC CON`, REC, BĐPT, REAL INPUT, fixed CON1→CON6, sell priority, persistent FREEZE ALL của chuỗi bán, route/map/revive donor Clean Route v1.5.9 và các helper fight/confirm ổn định khác.
+
+**BUILD/CI PASS không đồng nghĩa RUNTIME PASS. R2 vẫn là RUNTIME UNTESTED cho tới test game thật.**
