@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ThanLongItemConsolidator VERSION 0.2.0 LANGUAGES CXX RC)
+project(ThanLongItemConsolidator VERSION 0.2.1 LANGUAGES CXX RC)
 
 if(NOT WIN32)
     message(FATAL_ERROR "ThanLongItemConsolidator is Windows-only")
@@ -12,44 +12,33 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# GitHub connector transport: the large verified donor source is stored as
-# small ZIP chunks. Rehydrate the exact .inc files at configure time.
-set(DONOR_ARCHIVE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/donor159")
-set(DONOR_GEN_ROOT "${CMAKE_BINARY_DIR}/generated")
-set(DONOR_GEN_DIR "${DONOR_GEN_ROOT}/donor159")
-file(MAKE_DIRECTORY "${DONOR_GEN_DIR}")
-file(GLOB DONOR_ARCHIVES "${DONOR_ARCHIVE_DIR}/*.zip")
-if(NOT DONOR_ARCHIVES)
-    message(FATAL_ERROR "Missing vendor/donor159/*.zip source chunks")
+set(DONOR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/generated/donor159")
+if(NOT EXISTS "${DONOR_DIR}/src/controller.cpp")
+    message(FATAL_ERROR "Donor source not rehydrated. Run tools/rehydrate_v159.ps1 before CMake configure.")
 endif()
-foreach(archive IN LISTS DONOR_ARCHIVES)
-    execute_process(
-        COMMAND "${CMAKE_COMMAND}" -E tar xvf "${archive}"
-        WORKING_DIRECTORY "${DONOR_GEN_DIR}"
-        RESULT_VARIABLE unpack_result
-        OUTPUT_QUIET
-        ERROR_VARIABLE unpack_error)
-    if(NOT unpack_result EQUAL 0)
-        message(FATAL_ERROR "Cannot unpack ${archive}: ${unpack_error}")
-    endif()
-endforeach()
 
-add_library(ThanLongCleanRouteBridge SHARED src/bridge.cpp)
-target_include_directories(ThanLongCleanRouteBridge PRIVATE src "${DONOR_GEN_ROOT}")
+add_library(ThanLongCleanRouteBridge SHARED "${DONOR_DIR}/src/bridge.cpp")
+target_include_directories(ThanLongCleanRouteBridge PRIVATE "${DONOR_DIR}/src")
 target_compile_definitions(ThanLongCleanRouteBridge PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_link_libraries(ThanLongCleanRouteBridge PRIVATE user32 kernel32)
 
-add_executable(ThanLongItemConsolidator WIN32 src/controller.cpp resources/app.rc)
-target_include_directories(ThanLongItemConsolidator PRIVATE src "${DONOR_GEN_ROOT}")
+add_executable(ThanLongItemConsolidator WIN32
+    "${DONOR_DIR}/src/controller.cpp"
+    "${DONOR_DIR}/resources/app.rc"
+)
+target_include_directories(ThanLongItemConsolidator PRIVATE "${DONOR_DIR}/src" "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_definitions(ThanLongItemConsolidator PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
 target_link_libraries(ThanLongItemConsolidator PRIVATE comctl32 user32 kernel32 gdi32)
 
-add_executable(route_logic_tests src/route_logic_test.cpp)
-target_include_directories(route_logic_tests PRIVATE src)
-add_executable(rotation_logic_tests src/rotation_logic_test.cpp)
-target_include_directories(rotation_logic_tests PRIVATE src)
+add_executable(route_logic_tests "${DONOR_DIR}/src/route_logic_test.cpp")
+target_include_directories(route_logic_tests PRIVATE "${DONOR_DIR}/src")
+add_executable(rotation_logic_tests "${DONOR_DIR}/src/rotation_logic_test.cpp")
+target_include_directories(rotation_logic_tests PRIVATE "${DONOR_DIR}/src")
+add_executable(trade_logic_tests src/trade_logic_test.cpp)
+target_include_directories(trade_logic_tests PRIVATE src)
 
 if(MSVC)
-    foreach(t ThanLongCleanRouteBridge ThanLongItemConsolidator route_logic_tests rotation_logic_tests)
+    foreach(t ThanLongCleanRouteBridge ThanLongItemConsolidator route_logic_tests rotation_logic_tests trade_logic_tests)
         target_compile_options(${t} PRIVATE /utf-8 /W4 /permissive-)
     endforeach()
 endif()

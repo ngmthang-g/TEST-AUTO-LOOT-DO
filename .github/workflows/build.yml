@@ -1,10 +1,10 @@
-name: build-item-consolidator-v020
+name: build-item-consolidator-v021
 
 on:
   push:
     branches:
       - main
-      - agent/item-consolidator-v0.2-gui-donor159
+      - agent/item-consolidator-v0.2.1-exact-trade-logic
   pull_request:
   workflow_dispatch:
 
@@ -13,30 +13,38 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
+      - name: Rehydrate exact Clean Route v1.5.9 donor + v0.2.1 patch
+        shell: pwsh
+        run: .\tools\rehydrate_v159.ps1
       - name: Configure x64
         run: cmake -S . -B build -A x64
-
       - name: Build Release
         run: cmake --build build --config Release --parallel
-
       - name: Route logic self-test
         run: .\build\Release\route_logic_tests.exe
-
       - name: Rotation logic self-test
         run: .\build\Release\rotation_logic_tests.exe
-
+      - name: Exact trade scheduler self-test
+        run: .\build\Release\trade_logic_tests.exe
+      - name: Static exact-trade audit
+        shell: pwsh
+        run: |
+          $c = Get-Content generated\donor159\src\controller.cpp -Raw
+          foreach ($required in @('mainSellThreshold_ = 6','childTriggerFreeSlots_ = 0','tradeGlobalFreeze_','PrepareMain','PrepareChild','freeBagSpace <= mainSellThreshold_','freeBagSpace <= 0','trade_invite_')) {
+            if ($c -notmatch [regex]::Escape($required)) { throw "Missing exact-trade token: $required" }
+          }
+          if ($c -match 'roundRobinCursor_') { throw 'Round-robin must not exist in v0.2.1 exact priority coordinator' }
+          Write-Host 'EXACT TRADE STATIC AUDIT PASS'
       - name: Stage artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force stage | Out-Null
-          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.0.exe
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.1.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
           Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
           Copy-Item macros stage\macros -Recurse
-          Copy-Item docs\history\VERSION_v0.2.0.md stage\VERSION_v0.2.0.md
-
+          Copy-Item docs\history\VERSION_v0.2.1.md stage\VERSION_v0.2.1.md
       - uses: actions/upload-artifact@v4
         with:
-          name: ThanLongItemConsolidator-v0.2.0-win-x64
+          name: ThanLongItemConsolidator-v0.2.1-win-x64
           path: stage
