@@ -20,6 +20,8 @@
 - R2 base controller: `de141e34f07903c3e490d9684410309f4e0d3a49d7e36438b76a9e941e8cd6e2`.
 - R3 controller: `a69fa0df4932e4020aed6e61b4109bd2c558db5c407afedb46c03456fb575abf`.
 - R3 patch: `3b013821934c882cce8dc755894f66ab835feec394d3433015127a8792fc2136`.
+- CI #60 / run `32048547405`: FAILED before compile because Windows checkout changed patch transport EOL; runtime source not implicated.
+- CI #61 / run `32048648947`: **CI PASS / BUILD PASS** including rehydrate, x64 build, route/rotation/trade tests, static multi-delete-only audit and artifact upload.
 - Runtime status: **RUNTIME UNTESTED** until live multi-delete is tested.
 
 ## v0.2.7-R2 — 2026-08-17

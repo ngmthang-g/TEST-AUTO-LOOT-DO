@@ -33,7 +33,8 @@ User explicitly ordered all other code/features frozen. R3 changes only `DeleteT
 ## Build / Runtime State
 - Local patch apply test: PASS; R2 exact source + R3 patch is byte-identical to final R3 controller.
 - Exhaustive index/remap model test for multi-delete MAIN references: PASS for all delete subsets across test sizes 1..8.
-- GitHub CI: pending until branch build completes.
+- CI #60 / run `32048547405`: failed only on Windows patch EOL checksum before compile; wrapper now canonicalizes patch transport to LF.
+- CI #61 / run `32048648947`: **CI PASS / BUILD PASS**; all build/tests/static audits/artifact upload passed.
 - Runtime: **RUNTIME UNTESTED** until user verifies live multi-delete.
 
 ## Source Identity

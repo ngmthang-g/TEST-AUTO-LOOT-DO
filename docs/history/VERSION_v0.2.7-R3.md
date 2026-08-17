@@ -34,5 +34,6 @@ Only `DeleteTradeSequenceRow()` changes in runtime source:
 
 ## Build / Runtime
 - Local patch/apply and reference-remap tests: PASS.
-- GitHub CI: pending at document creation; final result is authoritative once Actions completes.
+- CI #60 / run `32048547405`: failed before compile on patch transport EOL checksum only; no runtime-source change was made.
+- CI #61 / run `32048648947`: **CI PASS / BUILD PASS** — rehydrate, Windows x64 build, route/rotation/trade tests, static R3 audit and artifact upload all passed.
 - Runtime: **RUNTIME UNTESTED** until user tests multi-delete in the live tool.
