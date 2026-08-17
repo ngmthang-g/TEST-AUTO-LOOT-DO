@@ -1,0 +1,36 @@
+ SetText(selected_, L"LẤY TỌA CHỌN " + TradeRoleLabel(child->profile.tradeRole) + L" TRÊN CỬA SỔ MAIN • F8");
++    }
++
++    void TestTradeSelectPoint() {
++        Account* child = SelectedAccount();
++        Account* main = AccountByTradeRole(1);
++        if (!child || child->profile.tradeRole < 2 || !main) { Log(L"TEST tọa chọn CON: cần chọn CON và có MAIN."); return; }
++        if (!child->profile.tradeSelectPoint.valid) { LogAccount(*child, L"Chưa lấy tọa MAIN chọn CON này."); return; }
++        POINT point{}; std::wstring error;
++        if (!ScaleClickPoint(main->game, child->profile.tradeSelectPoint, point, error) || !RealInputClick(*main, point, error)) {
++            LogAccount(*main, L"TEST chọn " + TradeRoleLabel(child->profile.tradeRole) + L" FAIL: " + error); return;
++        }
++        LogAccount(*main, L"TEST chọn " + TradeRoleLabel(child->profile.tradeRole) + L" PASS • REAL INPUT chiếm chuột.");
++    }
++
+     void BeginCapture(ClickSlot slot) {
+         Account* a = SelectedAccount();
+         if (!a) { Log(L"Chưa chọn acc để lấy tọa độ"); return; }
+         captureSlot_ = slot;
+         captureMacroIndex_ = -1;
++        captureTradeSelectChildPid_ = 0;
++        captureTradeSequenceIndex_ = -1;
+         capturePid_ = a->game.pid;
+         const int index = static_cast<int>(slot);
+         LogAccount(*a, L"Đang chờ F8 để lấy điểm " + std::wstring(kClickLabels[static_cast<std::size_t>(index)]) + L".");
+@@ -2148,73 +2609,111 @@ private:
+     }
+ 
+     void CaptureHotkeyPoint() {
+-        if ((captureSlot_ == ClickSlot::None && captureMacroIndex_ < 0) || capturePid_ == 0) return;
+-        Account* a = AccountByPid(capturePid_);
+-        if (!a || !IsWindow(a->game.window)) {
++        const bool hasMode = captureSlot_ != ClickSlot::None || captureMacroIndex_ >= 0 ||
++                             captureTradeSelectChildPid_ != 0 || captureTradeSequenceIndex_ >= 0;
++        if (!hasMode || capturePid_ == 0) return;
++        Account* captureAc

@@ -1,34 +1,22 @@
 # CHANGELOG
 
-## [v0.1.0] - 2026-08-16
+## v0.2.8
+- Added one global user-captured `TỌA ĐỘ GIAO DỊCH`; MAIN and selected CON both stop AutoFight and route there before a trade round starts.
+- Added fail-closed death/map/state checks around rendezvous, selection, trade sequence and child verification.
+- Added grouped mini-sequence repeats to the global `CHUỖI GD ACC CON`: select consecutive rows, set group repeat, group/ungroup them, and repeat the whole ordered group before continuing the outer workflow.
+- Groups may contain active-CON rows and MAIN references; existing per-row repeat remains supported.
+- Added per-CON `DỪNG GD KHI CON TRỐNG ≥ N ô` setting.
+- Kept exact FULL=0 as the only **start** condition, but pinned the selected child for the session and continued trading it until its own free-slot target is reached.
+- Added `VerifyChild` bag-stability phase between rounds.
+- Added `DrainMainSell`: if MAIN reaches its sell threshold after a trade round, child stays held while MAIN sells, then MAIN returns to rendezvous and continues the same child session.
+- Added one round-wide transfer-click budget shared by all `CHUYỂN ĐỒ` rows/group repeats so MAIN is not intentionally pushed below its sell threshold.
+- Shared ACC CON workflow now requires at least one `CHUYỂN ĐỒ` row to prevent a click-only persistent drain loop.
+- Preserved shared MAIN/global ACC CON model, DỒN ĐỒ OFF, BĐPT REAL INPUT, sell-sequence persistent FREEZE ALL and fixed CON1->CON6 priority.
 
-### Requested
-- Build a very small independent RemoteLoot PoC to determine which loot action the server accepts at distance.
-- Prioritize proof of direct remote pickup before building a complete tool.
+## v0.2.7
+- Replaced per-CON trade workflows with one global `CHUỖI GD ACC CON` shared by CON1..CON6.
+- Runtime binds every CON-targeted row to the active transaction child selected by BĐPT; MAIN references remain shared.
 
-### Added / Changed
-- Windows x64 C++ controller and injected `WH_GETMESSAGE` bridge.
-- Runtime IL2CPP semantic resolver for loot APIs.
-- Unity managed-context validation.
-- Nearest ItemPack probe when runtime signature is supported without guessing.
-- One-shot `ClickToObject(RoleID)` test with no PoC movement call.
-- One-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call.
-- `HasBuff(30008009)` Càn Khôn Hồ state probe.
-- `GetFreeBagSpace()` before/after auxiliary pickup proof plus nearest-pack rescan.
-- GitHub Actions Windows x64 build/artifact workflow.
-- Project knowledge and runtime test procedure.
-
-### Build
-- Final code commit tested by CI: `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e`.
-- GitHub Actions run: `#8` / run ID `31941065682`.
-- Final: `BUILD PASS` / `CI PASS` on Windows x64.
-- Artifact workflow packages `RemoteLootProbe.exe`, `RemoteLootBridge.dll`, and README.
-
-### Runtime
-- Status: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN`.
-- Càn Khôn Hồ remote-loot mechanism: `UNKNOWN`.
-
-### Next Version Notes
-- Do not add automation loops yet.
-- First collect repeatable runtime evidence for distant `ClickToObject` and direct pick-all with buff 30008009 absent/present.
+## v0.2.6
+- Added `DỒN ĐỒ: BẬT/TẮT` and independent auto-train/sell mode when OFF.
+- Added sell-sequence cloning between accounts.

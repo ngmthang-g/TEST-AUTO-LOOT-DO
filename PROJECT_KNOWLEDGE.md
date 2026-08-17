@@ -1,75 +1,44 @@
-# PROJECT KNOWLEDGE
+# PROJECT KNOWLEDGE — v0.2.8
 
-## Project Identity
-- Name: RemoteLoot PoC
-- Repository: `ngmthang-g/TEST-AUTO-LOOT-DO`
-- Primary branch: `main`
-- Current version: `v0.1.0`
-- Platform: Windows x64, native C++20/CMake
-- Runtime state: `RUNTIME UNTESTED`
+## Core trade-session invariant
+`FreeBagSpace == 0` on a child is an **entry gate only**. It is NOT re-evaluated as a requirement before every subsequent round.
 
-## Project Goal
-Prove one narrow question before building a larger tool: **can the frozen Thần Long client/server accept semantic loot interaction/pickup while the local character remains farther away than the built-in normal pickup flow?**
+When BĐPT selects CONn, `tradeTxn_.childPid` is pinned for the whole drain session. The session ends only when the same child reaches its persisted per-account `TradeDrainTargetFreeSlots` target, or a safety/error abort occurs.
 
-## Current State
-### Source implemented
-- process discovery via loaded `GameAssembly.dll`;
-- per-PID shared-memory controller/bridge protocol;
-- `WH_GETMESSAGE` bridge injected on the target window thread;
-- IL2CPP export/class/method discovery by semantic names;
-- read-only Unity `SynchronizationContext` validation;
-- read-only loot API signature dump;
-- read-only nearest-pack probe when `GetNearestItemPack` is zero-arg at runtime;
-- one-shot `ClickToObject(RoleID)` test with no PoC movement call;
-- one-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call;
-- read-only `HasBuff(30008009)` test.
+## Safe rendezvous before trade
+Global `tradeRendezvous_` stores one user-captured Map/X/Y (`TradeRendezvousMap/X/Y/Valid/Tolerance`). Before each real trade round:
+1. hold MAIN + selected child,
+2. stop AutoFight on both using the existing two stop-click points through BĐPT,
+3. route both with donor v1.5.9 robust travel to the same rendezvous,
+4. require both alive/map-ready and standing at rendezvous with AutoFight/AutoPath/riding off,
+5. only then MAIN selects the child and the shared ACC CON workflow runs.
 
-### Runtime-confirmed working
-None yet.
+Death/map instability/state loss during selection, sequence or verify is fail-closed and aborts the session instead of continuing clicks.
 
-### Built but runtime-untested
-All v0.1.0 behavior until CI/runtime evidence says otherwise.
+## Persistent child drain
+Each `AccountProfile` has `tradeDrainTargetFreeSlots` (1..90, default 6).
+- Start eligibility remains exact FULL: child `freeBagSpace == 0`.
+- On start, target is copied into `tradeTxn_.childTargetFreeSlots` so editing the UI mid-session cannot change the active contract.
+- After each workflow round, `VerifyChild` waits for bag space to stabilize and checks `freeBagSpace >= childTargetFreeSlots`.
+- Below target: same child remains held and another round starts even though it is no longer FULL.
+- MAIN sell threshold still has absolute safety priority. After at least one round, if MAIN reaches `<= mainSellThreshold_`, phase `DrainMainSell` runs the existing MAIN sell workflow while the child remains held; then MAIN returns to rendezvous and the same child session continues.
 
-## Hard Rules
-1. This repository is an **independent RemoteLoot proof tool**, not a branch of Auto Train/Auto Sell.
-2. Do not add automatic movement to remote pickup tests.
-3. Do not add auto-loop/spam until one-shot server acceptance is established.
-4. Do not claim direct remote pickup PASS from a successful method invocation alone.
-5. PASS requires concrete runtime state: character stays put, target pack changes/disappears, bag/item state changes correctly, and no disconnect/crash.
-6. A crash/disconnect can be an execution-boundary failure and must not be silently interpreted as server rejection.
-7. Càn Khôn Hồ mechanism remains UNKNOWN. Only the built-in `HasBuff(30008009)` skip guard is VERIFIED from shipped source.
-8. Do not broad reverse-engineer the client. Use the canonical knowledge repo first and only investigate exact missing facts.
+## Grouped mini-sequences
+`TradeSequenceStep` adds `groupId` and `groupRepeat`.
+- Positive equal `groupId` on contiguous rows defines a mini-sequence.
+- Group requires at least 2 contiguous rows and repeat >=2.
+- The group can interleave active-CON rows and `MAIN #n` references.
+- Existing per-row `repeat` is evaluated first; when the last row of the group finishes, `AdvanceTradeSequenceIndex()` loops to the group start until `groupRepeat` is satisfied.
+- `NormalizeTradeGroups()` repairs IDs after editor mutations and prevents accidental non-contiguous groups.
+- Copy/paste remaps pasted group IDs so they cannot merge into an existing group accidentally.
+- A shared ACC CON workflow must contain at least one `CHUYỂN ĐỒ` row; otherwise persistent drain is rejected.
 
-## Verified Client Facts Used
-From canonical knowledge:
-- `Game.GetNearestItemPack(...)` / `Game.GetNearbyItemPack(...)` exist for item-pack discovery.
-- item packs expose at least `Type`, `RoleID`, `Position` in shipped Lua.
-- normal shipped auto pickup uses `MoveToEx` when distance >100, then `ClickToObject(RoleID)`.
-- shipped pick-all is `Game.PickUpItemFromItemPack(itemPackID,-1,1)`.
-- built-in auto pickup skips while `Game.HasBuff(30008009)` and mentions Càn Khôn Hồ.
+## MAIN capacity guard across grouped rows
+A trade round snapshots one safe transfer-click budget from MAIN free space above `mainSellThreshold_`. `roundTransferClicks` counts **all** CON `CHUYỂN ĐỒ` clicks across row repeats and group repeats. Once budget is exhausted, remaining transfer clicks are skipped while confirmation/other workflow steps continue. This prevents several transfer rows/groups from independently consuming the same budget.
 
-## Important Unknowns
-- Is `ItemPack.RoleID` identical to the `itemPackID` expected by direct pickup in all runtime cases?
-- Does server accept direct pickup when farther than normal pickup range and buff 30008009 is absent?
-- Does server acceptance change when buff 30008009 is present?
-- Does Càn Khôn Hồ use this same request path or a separate server-driven subsystem?
-- Is direct invocation from the validated message-hook context stable enough for this one-shot proof on the target build?
-
-## Current Test Order
-1. Validate Unity managed context.
-2. Resolve exact runtime loot method signatures.
-3. Scan nearest pack if signature is supported.
-4. Record buff 30008009 absent/present.
-5. At >100 distance, test `ClickToObject(RoleID)` with no movement call.
-6. At >100 distance, test `PickUpItemFromItemPack(candidate,-1,1)` with no movement call.
-7. Record pack/bag/movement/disconnect result.
-8. Repeat under the opposite Càn Khôn Hồ buff state.
-
-## Evidence Index
-- `EVID-001`: canonical shipped Lua/API knowledge establishes normal loot flow and direct semantic pickup call.
-- Runtime evidence for v0.1.0: pending user test.
-
-## Decisions
-- `DEC-001`: keep v0.1.0 one-shot and movement-free.
-- `DEC-002`: refuse to guess unsupported runtime signatures; print them and stop that probe.
-- `DEC-003`: if remote pickup passes, production implementation must use a proper action gate/MainThread dispatcher/state proof rather than preserving PoC shortcuts.
+## Preserved invariants
+- Active trade configuration remains exactly two reusable definitions: shared `mainTradeSequence_` and one global `childTradeSequence_` for whichever CON is active.
+- Fixed CON1 -> CON6 priority remains.
+- DỒN ĐỒ OFF remains independent auto-train/sell mode.
+- All automatic physical clicks use BĐPT `CoordinatorClick` and REAL INPUT; exactly two `SendInput(` call sites remain in the raw LEFTDOWN/LEFTUP function.
+- Persistent FREEZE ALL across the whole sell-click sequence remains unchanged.

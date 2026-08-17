@@ -1,190 +1,27 @@
-# RemoteLoot PoC v0.1.0
+# Thần Long Item Consolidator v0.2.8
 
-Mục tiêu duy nhất của repo này là **xác định server/client chấp nhận hành vi nhặt bọc nào khi nhân vật đứng xa**. Đây chưa phải Auto Loot hoàn chỉnh.
+Windows x64. v0.2.8 làm phiên dồn đồ an toàn hơn và cho phép chuỗi giao dịch lặp theo nhóm nhỏ.
 
-## Trạng thái hiện tại
+## TỌA ĐỘ GIAO DỊCH chung
+- Có nút `TỌA GD` để lấy Map/X/Y từ acc đang đứng tại điểm hẹn do người dùng tự chọn.
+- Khi DỒN ĐỒ đang BẬT và một CON đủ điều kiện FULL=0, BĐPT khóa đúng MAIN + CON đó, dừng AutoFight của cả hai và route **cả hai về cùng TỌA ĐỘ GIAO DỊCH** bằng nền route donor v1.5.9.
+- Chỉ khi cả hai đã đứng ổn định tại điểm hẹn, không AutoFight/AutoPath/riding và state an toàn thì chuỗi giao dịch mới bắt đầu.
+- Nếu MAIN/CON chết, đổi map bất thường hoặc mất state trong lúc chuẩn bị/chuỗi/verify thì phiên dồn abort fail-closed, không click mù.
 
-- Source: `BUILD PASS`.
-- GitHub Actions Windows x64: `CI PASS` cho code commit `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e` (run #8 / `31941065682`).
-- Runtime game/server: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN` cho tới khi có test thật.
+## Nhóm lặp trong CHUỖI GD ACC CON
+- Chọn 2 hoặc nhiều dòng **liên tiếp**, nhập `Lặp nhóm`, bấm `GOM DÒNG ĐÃ CHỌN`.
+- Một nhóm có thể gồm cả dòng `ACC CON ĐANG GD` và dòng tham chiếu `MAIN #n`.
+- Runtime chạy hết nhóm nhỏ theo đúng thứ tự rồi quay lại đầu nhóm cho tới đủ số vòng, sau đó mới tiếp tục chuỗi lớn.
+- `BỎ NHÓM` tháo toàn bộ group của các dòng đang chọn.
+- Lặp từng dòng (`Lặp`) vẫn hoạt động bên trong nhóm.
+- `CHUYỂN ĐỒ` vẫn chỉ chạy trên CON đang active và mọi click vẫn đi qua BĐPT/REAL INPUT.
 
-## Căn cứ VERIFIED từ knowledge base
+## FULL chỉ là cổng vào phiên; dừng theo số ô riêng từng CON
+- CON chỉ được **bắt đầu** phiên khi `FreeBagSpace == 0`.
+- Mỗi CON có cấu hình riêng `DỪNG GD KHI CON TRỐNG ≥ N ô`.
+- Khi CON đã được chọn, BĐPT giữ nguyên `childPid` đó qua nhiều vòng giao dịch; CON không cần FULL lại ở các vòng sau.
+- Sau mỗi chuỗi, tool chờ snapshot túi ổn định. Nếu CON chưa đạt N ô trống thì tiếp tục vòng mới với chính CON đó.
+- Nếu MAIN chạm ngưỡng bán trong phiên, CON vẫn HOLD; MAIN đi bán bằng workflow hiện có, sau đó quay lại TỌA GD và tiếp tục cùng CON.
+- Khi CON đạt `FreeBagSpace >= N`, phiên mới kết thúc và nhả HOLD để core auto-train tiếp tục.
 
-Client đã có semantic loot API:
-
-- `Game.GetNearestItemPack(...)` / `Game.GetNearbyItemPack(...)`
-- `Game.ClickToObject(RoleID)`
-- `Game.PickUpItemFromItemPack(itemPackID, slotIndex, UsingAuto)`
-- built-in pick-all: `Game.PickUpItemFromItemPack(itemPackID, -1, 1)`
-- built-in auto loot bình thường: nếu khoảng cách > 100 thì `MoveToEx(...)` rồi mới `ClickToObject(...)`
-- built-in auto pickup bị skip khi `Game.HasBuff(30008009)` và source hiển thị thông báo Càn Khôn Hồ.
-
-Điểm **chưa VERIFIED** là server có chấp nhận direct pickup ở xa khi không có Càn Khôn Hồ hay không. PoC này tồn tại để trả lời đúng câu đó.
-
-## Thiết kế PoC
-
-PoC gồm 2 file x64:
-
-- `RemoteLootProbe.exe` — controller console độc lập.
-- `RemoteLootBridge.dll` — `WH_GETMESSAGE` hook cực nhỏ chạy trên window thread của game và gọi IL2CPP semantic API.
-
-Không có:
-
-- Auto Train.
-- Auto Sell.
-- vòng lặp auto loot.
-- OCR/pixel scan.
-- `MoveTo` / `MoveToEx` trong các test remote.
-- danh sách 90 action hoặc spam request.
-
-Mỗi lệnh mutable là **one-shot** do người test bấm tay.
-
-> PoC gọi semantic action trực tiếp từ validated Unity `SynchronizationContext` hook để giảm biến số khi test server acceptance. Đây **không phải** kiến trúc action engine production cuối cùng. Nếu direct pickup PASS, bản tool thật phải quay về ActionGate/MainThread dispatcher + state proof chuẩn.
-
-## Build
-
-GitHub Actions tự build Windows x64 và upload artifact:
-
-`RemoteLootPoC-v0.1.0-win-x64`
-
-Artifact chứa:
-
-- `RemoteLootProbe.exe`
-- `RemoteLootBridge.dll`
-- `README.md`
-
-Build local:
-
-```powershell
-cmake -S . -B build -A x64
-cmake --build build --config Release
-```
-
-Sau build, để `RemoteLootProbe.exe` và `RemoteLootBridge.dll` cùng một thư mục.
-
-## Chạy
-
-1. Mở game và đăng nhập nhân vật.
-2. Chạy `RemoteLootProbe.exe` cùng mức quyền với game. Nếu game chạy Administrator thì probe cũng chạy Administrator.
-3. Chọn PID game.
-4. Probe tự chạy:
-   - `Validate Unity managed context`;
-   - `Resolve/print loot API signatures`.
-5. Tạo một bọc đồ trên đất và đứng **xa hơn khoảng nhặt bình thường**.
-6. Tắt Auto pickup của game.
-7. Test theo thứ tự bên dưới.
-
-## Test A — scanner
-
-Menu `3`:
-
-`Scan nearest ItemPack`
-
-Nếu method runtime đúng dạng PoC hỗ trợ, tool in `RoleID` của bọc gần nhất và giữ nó làm candidate `itemPackID`.
-
-Nếu runtime signature khác, PoC **không đoán tham số**; log sẽ in exact signature và trả `SIGNATURE_UNSUPPORTED`.
-
-## Test B — remote ClickToObject
-
-Menu `4`:
-
-```text
-Game.ClickToObject(ItemPack.RoleID)
-```
-
-PoC tuyệt đối không gọi `MoveTo`/`MoveToEx` trước hoặc sau lệnh này.
-
-### PASS có ý nghĩa khi
-
-- nhân vật không chạy lại gần;
-- pack-content lifecycle hoặc pickup response xuất hiện;
-- game không disconnect/crash;
-- kết quả lặp lại được.
-
-### FAIL
-
-- không có phản ứng;
-- server từ chối;
-- chỉ hoạt động khi ở gần;
-- disconnect/crash/exception.
-
-Disconnect/crash **không tự động chứng minh server từ chối**; có thể là execution-boundary/re-entrancy failure. Log phải được giữ lại.
-
-## Test C — direct pickup all ở xa
-
-Menu `5`:
-
-```text
-Game.PickUpItemFromItemPack(itemPackID, -1, 1)
-```
-
-Không có movement call.
-
-PoC tự đọc `GetFreeBagSpace()` trước/sau và rescan pack làm bằng chứng phụ. Lưu ý: số ô trống không đổi **không đủ kết luận FAIL** nếu vật phẩm được cộng dồn vào stack đang có.
-
-### DIRECT REMOTE PICKUP = PASS chỉ khi
-
-Cùng một test condition cho thấy:
-
-- nhân vật vẫn đứng nguyên vị trí;
-- bọc mục tiêu biến mất hoặc contents của nó giảm đúng;
-- tay nải/item state thay đổi đúng;
-- không disconnect/crash;
-- có thể lặp lại ở nhiều bọc.
-
-Nếu PASS khi **buff 30008009 ABSENT**, giả thuyết mạnh nhất là khoảng cách >100 trong shipped Auto chỉ là client-side policy hoặc server cho phép semantic pickup từ xa trong phạm vi AOI.
-
-Nếu FAIL khi buff absent nhưng PASS khi buff present, server nhiều khả năng có entitlement/state check liên quan Càn Khôn Hồ.
-
-Nếu cả direct pickup lẫn ClickToObject đều không phải cơ chế khi buff present, cần chuyển sang nghiên cứu targeted subsystem của Càn Khôn Hồ; không broad reverse client.
-
-## Test D — Càn Khôn Hồ
-
-Menu `6` gọi:
-
-```text
-Game.HasBuff(30008009)
-```
-
-Chạy lại cùng test B/C ở hai trạng thái:
-
-1. `ABSENT`
-2. `PRESENT`
-
-Không thay đổi điều kiện khác nếu có thể.
-
-## Test E — ô trống tay nải
-
-Menu `7` gọi read-only:
-
-```text
-Game.GetFreeBagSpace()
-```
-
-Dùng để đối chiếu trước/sau pickup, không dùng một mình làm bằng chứng thành công/thất bại.
-
-## Bảng ghi kết quả cần gửi lại
-
-```text
-Game PID:
-ValidateContext: PASS/FAIL
-Loot API signatures:
-ScanNearestPack: PASS/FAIL
-Distance: gần / >100 / rất xa trong AOI
-Buff 30008009: ABSENT/PRESENT
-ClickToObject: PASS/FAIL + hiện tượng
-DirectPickupAll: PASS/FAIL + hiện tượng
-Nhân vật có di chuyển: YES/NO
-Pack biến mất: YES/NO
-Bag thay đổi: YES/NO
-Disconnect/crash: YES/NO
-Log detail:
-```
-
-## Evidence status v0.1.0
-
-- Source/CI: `BUILD PASS / CI PASS`.
-- Runtime: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN` cho tới khi có test thật.
-- Càn Khôn Hồ mechanism: `UNKNOWN`; buff 30008009 skip guard là VERIFIED, nhưng cơ chế nhặt riêng của nó chưa được chứng minh.
+DỒN ĐỒ OFF, auto-train độc lập, sell sequence FREEZE ALL, shared `CHUỖI GD MAIN` + global `CHUỖI GD ACC CON`, REC, copy, 6-click, revive/map/route và BĐPT từ các bản trước được giữ nguyên.
