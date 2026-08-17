@@ -1,0 +1,156 @@
+diff --git a/src/controller.cpp b/src/controller.cpp
+index 9f7e63b..8a563b2 100644
+--- a/src/controller.cpp
++++ b/src/controller.cpp
+@@ -24,7 +24,7 @@ using namespace itemtrade;
+ 
+ namespace {
+ 
+-constexpr wchar_t kTitle[] = L"Thần Long Item Consolidator v0.2.1 • exact trade logic • donor Clean Route 1.5.9";
++constexpr wchar_t kTitle[] = L"Thần Long Item Consolidator v0.2.2 • REAL INPUT + central coordinator • donor Clean Route 1.5.9";
+ constexpr wchar_t kGameModule[] = L"GameAssembly.dll";
+ constexpr UINT_PTR kTimer = 1;
+ constexpr int kCaptureHotkeyId = 9001;
+@@ -126,7 +126,23 @@ constexpr int IDC_TRADE_ROLE = 190;
+ constexpr int IDC_TRADE_ENABLE = 191;
+ constexpr int IDC_CHILD_TRIGGER = 192;
+ constexpr int IDC_MAIN_SELL_THRESHOLD = 193;
+-constexpr int IDC_TRADE_RELOAD = 194;
++constexpr int IDC_TRADE_RELOAD = 194; // v0.2.2: open visual trade-sequence editor
++constexpr int IDC_TRADE_SELECT_CAPTURE = 195;
++constexpr int IDC_TRADE_SELECT_TEST = 196;
++constexpr int IDC_SEQ_LIST = 300;
++constexpr int IDC_SEQ_TARGET = 301;
++constexpr int IDC_SEQ_KIND = 302;
++constexpr int IDC_SEQ_DESC = 303;
++constexpr int IDC_SEQ_DELAY = 304;
++constexpr int IDC_SEQ_REPEAT = 305;
++constexpr int IDC_SEQ_ADD = 306;
++constexpr int IDC_SEQ_DELETE = 307;
++constexpr int IDC_SEQ_UP = 308;
++constexpr int IDC_SEQ_DOWN = 309;
++constexpr int IDC_SEQ_SAVE = 310;
++constexpr int IDC_SEQ_CAPTURE = 311;
++constexpr int IDC_SEQ_TEST = 312;
++constexpr int IDC_SEQ_CLOSE = 313;
+ 
+ constexpr std::array<const wchar_t*, 6> kClickKeys = {
+     L"Confirm", L"Revive", L"AutoMenu", L"Attack", L"StopAuto1", L"StopAuto2"
+@@ -160,6 +176,15 @@ struct SellMacroStep {
+     int repeat = 1;
+ };
+ 
++struct TradeSequenceStep {
++    int target = 0; // 0=MAIN, 1=selected CON
++    int kind = 0;   // 0=normal click, 1=item-transfer click
++    std::wstring description;
++    ClickPoint point{};
++    int delayMs = 500; // wait after each click
++    int repeat = 1;
++};
++
+ struct SellNpcPreset {
+     const wchar_t* name;
+     int mapID;
+@@ -203,6 +228,7 @@ struct AccountProfile {
+     int rotateNoFullBagMin = kRotateNoFullBagMinDefault;
+     TargetProfile target{};
+     std::array<ClickPoint, 6> points{};
++    ClickPoint tradeSelectPoint{}; // captured on MAIN window, stored per CON
+     std::vector<SellMacroStep> sellMacro{};
+ };
+ 
+@@ -460,6 +486,12 @@ AccountProfile LoadProfile(const std::wstring& section) {
+         c.baseH = ReadIniInt(section, prefix + L"H", 0);
+         c.valid = c.x >= 0 && c.y >= 0 && c.baseW > 0 && c.baseH > 0;
+     }
++    p.tradeSelectPoint.x = ReadIniInt(section, L"TradeSelectX", -1);
++    p.tradeSelectPoint.y = ReadIniInt(section, L"TradeSelectY", -1);
++    p.tradeSelectPoint.baseW = ReadIniInt(section, L"TradeSelectW", 0);
++    p.tradeSelectPoint.baseH = ReadIniInt(section, L"TradeSelectH", 0);
++    p.tradeSelectPoint.valid = p.tradeSelectPoint.x >= 0 && p.tradeSelectPoint.y >= 0 &&
++                               p.tradeSelectPoint.baseW > 0 && p.tradeSelectPoint.baseH > 0;
+     int macroCount = ReadIniInt(section, L"SellMacroCount", 0);
+     if (macroCount < 0) macroCount = 0;
+     if (macroCount > 64) macroCount = 64;
+@@ -514,6 +546,10 @@ void SaveProfile(const AccountProfile& p) {
+         WriteIniInt(p.section, prefix + L"W", c.valid ? c.baseW : 0);
+         WriteIniInt(p.section, prefix + L"H", c.valid ? c.baseH : 0);
+     }
++    WriteIniInt(p.section, L"TradeSelectX", p.tradeSelectPoint.valid ? p.tradeSelectPoint.x : -1);
++    WriteIniInt(p.section, L"TradeSelectY", p.tradeSelectPoint.valid ? p.tradeSelectPoint.y : -1);
++    WriteIniInt(p.section, L"TradeSelectW", p.tradeSelectPoint.valid ? p.tradeSelectPoint.baseW : 0);
++    WriteIniInt(p.section, L"TradeSelectH", p.tradeSelectPoint.valid ? p.tradeSelectPoint.baseH : 0);
+     WriteIniInt(p.section, L"SellMacroCount", static_cast<int>(p.sellMacro.size()));
+     for (std::size_t i = 0; i < p.sellMacro.size(); ++i) {
+         const SellMacroStep& step = p.sellMacro[i];
+@@ -950,15 +986,17 @@ void ResetRuntime(RuntimeState& r) {
+     r.status = running ? L"Đang giám sát" : L"Đã dừng";
+ }
+ 
+-enum class TradePhase { Idle, PrepareMain, PrepareChild, Invite, Accept, Give, ConfirmChild, ConfirmMain };
++enum class TradePhase { Idle, PrepareMain, PrepareChild, SelectChild, Sequence, Invite, Accept, Give, ConfirmChild, ConfirmMain };
+ 
+ class App {
+ public:
+     bool Create(HINSTANCE instance) {
++        instance_ = instance;
+         MigrateLegacyConfigIfNeeded();
+         EnsureUnicodeIni();
+         LoadShutdownSettings();
+         LoadTradeSettings();
++        LoadTradeSequence();
+         tradeMacros_.SetDirectory(ExeDir() + L"\\macros");
+         spots_ = LoadSharedSpots();
+         INITCOMMONCONTROLSEX ic{sizeof(ic), ICC_STANDARD_CLASSES | ICC_LISTVIEW_CLASSES};
+@@ -995,6 +1033,27 @@ private:
+         return self ? self->Handle(msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
+     }
+ 
++    static LRESULT CALLBACK TradeEditorWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
++        App* self = reinterpret_cast<App*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
++        if (msg == WM_NCCREATE) {
++            auto* cs = reinterpret_cast<CREATESTRUCTW*>(lp);
++            self = reinterpret_cast<App*>(cs->lpCreateParams);
++            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
++            if (self) self->tradeEditor_ = hwnd;
++        }
++        if (!self) return DefWindowProcW(hwnd, msg, wp, lp);
++        return self->HandleTradeEditor(hwnd, msg, wp, lp);
++    }
++
++    HWND MakeIn(HWND parent, const wchar_t* cls, const wchar_t* text, DWORD style,
++                int x, int y, int w, int h, int id) {
++        HWND hWnd = CreateWindowExW(0, cls, text, WS_CHILD | WS_VISIBLE | style,
++                                    x, y, w, h, parent,
++                                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), instance_, nullptr);
++        if (hWnd) SendMessageW(hWnd, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
++        return hWnd;
++    }
++
+     HWND Make(const wchar_t* cls, const wchar_t* text, DWORD style,
+               int x, int y, int w, int h, int id) {
+         return CreateWindowExW(0, cls, text, WS_CHILD | WS_VISIBLE | style,
+@@ -1033,10 +1092,11 @@ private:
+         HFONT font = reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+         auto addFont = [font](HWND h){ if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE); };
+ 
+-        addFont(Make(L"STATIC", L"DANH SÁCH ACC — F4 tạm dừng/tiếp tục toàn bộ acc đang chạy", 0,
+-                     18, 10, 1005, 20, 0));
++        addFont(Make(L"STATIC", L"BỘ ĐIỀU PHỐI TRUNG TÂM", 0, 18, 8, 205, 24, 0));
++        tradeStatus_ = Make(L"STATIC", L"ĐIỀU PHỐI: khởi động...", SS_LEFT | SS_CENTERIMAGE | WS_BORDER,
++                            225, 6, 798, 27, 0); addFont(tradeStatus_);
+         clientList_ = Make(WC_LISTVIEWW, L"", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER,
+-                           18, 32, 1005, 165, IDC_CLIENT_LIST);
++                           18, 40, 1005, 157, IDC_CLIENT_LIST);
+         addFont(clientList_);
+         ListView_SetExtendedListViewStyle(clientList_, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_CHECKBOXES);
+         AddListColumn(0, 170, L"Nhân vật / RoleID");
+@@ -1064,8 +1124,11 @@ private:
+         childTriggerEdit_ = nullptr; // v0.2.1: child eligibility is exact FULL only.
+         addFont(Make(L"STATIC", L"MAIN bán ≤", 0, 758, 252, 70, 22, 0));
+         mainSellThresholdEdit_ = Make(L"EDIT", std::to_wstring(mainSellThreshold_).c_str(), WS_BORDER | ES_NUMBER | ES_CENTER, 828, 247, 42, 27, IDC_MAIN_SELL_THRESHOLD); addFont(mainSellThresholdEdit_);
+-        addFont(Make(L"BUTTON", L"NẠP MACRO", BS_PUSHBUTTON, 882, 247, 105, 27, IDC_TRADE_RELOAD));
+-        tradeStatus_ = Make(L"STATIC", L"GD: chờ cấu hình", SS_LEFT | SS_CENTERIMAGE, 538, 274, 485, 17, 0); addFont(tradeStatus_);
++        addFont(Make(L"BUTTON", L"CHUỖI CLICK GD", BS_PUSHBUTTON, 878, 247, 125, 27, IDC_TRADE_RELOAD));
++        addFont(Make(L"STATIC", L"Tọa chọn CON:", 0, 538

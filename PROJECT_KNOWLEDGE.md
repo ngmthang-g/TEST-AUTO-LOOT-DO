@@ -1,75 +1,73 @@
-# PROJECT KNOWLEDGE
+# PROJECT KNOWLEDGE — v0.2.7-R2
 
 ## Project Identity
-- Name: RemoteLoot PoC
-- Repository: `ngmthang-g/TEST-AUTO-LOOT-DO`
-- Primary branch: `main`
-- Current version: `v0.1.0`
-- Platform: Windows x64, native C++20/CMake
-- Runtime state: `RUNTIME UNTESTED`
-
-## Project Goal
-Prove one narrow question before building a larger tool: **can the frozen Thần Long client/server accept semantic loot interaction/pickup while the local character remains farther away than the built-in normal pickup flow?**
+- Name: Thần Long Item Consolidator / Auto dồn đồ
+- Repository: `ngmthang-g/TESTauto-don-do-acc-chinh`
+- Development branch: `agent/item-consolidator-v0.2.7-r2-rendezvous-groups`
+- Current version: v0.2.7-R2
+- Source base: exact clean v0.2.7 commit `1308b28bd38fb044b9fceed3671820e45fb2cd23`
+- Base controller SHA256: `397f1cf088ce0163cdba7aea06350cc25aff8aab4627e7def9331c9f1070845f`
+- Final controller SHA256: `de141e34f07903c3e490d9684410309f4e0d3a49d7e36438b76a9e941e8cd6e2`
 
 ## Current State
-### Source implemented
-- process discovery via loaded `GameAssembly.dll`;
-- per-PID shared-memory controller/bridge protocol;
-- `WH_GETMESSAGE` bridge injected on the target window thread;
-- IL2CPP export/class/method discovery by semantic names;
-- read-only Unity `SynchronizationContext` validation;
-- read-only loot API signature dump;
-- read-only nearest-pack probe when `GetNearestItemPack` is zero-arg at runtime;
-- one-shot `ClickToObject(RoleID)` test with no PoC movement call;
-- one-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call;
-- read-only `HasBuff(30008009)` test.
-
-### Runtime-confirmed working
-None yet.
+### Runtime-confirmed working / protected
+- **F4 pause** is explicitly user-confirmed useful and is protected. R2 keeps clean-v0.2.7 `ToggleGlobalPause()` byte-identical and keeps the single F4 `RegisterHotKey` line.
 
 ### Built but runtime-untested
-All v0.1.0 behavior until CI/runtime evidence says otherwise.
+- R2 trade rendezvous, grouped mini-sequence, five-click model, per-CON coordinate removal and AutoFight-stop fallback require live runtime validation.
+- Final CI #57 / run `32043612053`: **CI PASS / BUILD PASS**. This does not establish live runtime success.
 
-## Hard Rules
-1. This repository is an **independent RemoteLoot proof tool**, not a branch of Auto Train/Auto Sell.
-2. Do not add automatic movement to remote pickup tests.
-3. Do not add auto-loop/spam until one-shot server acceptance is established.
-4. Do not claim direct remote pickup PASS from a successful method invocation alone.
-5. PASS requires concrete runtime state: character stays put, target pack changes/disappears, bag/item state changes correctly, and no disconnect/crash.
-6. A crash/disconnect can be an execution-boundary failure and must not be silently interpreted as server rejection.
-7. Càn Khôn Hồ mechanism remains UNKNOWN. Only the built-in `HasBuff(30008009)` skip guard is VERIFIED from shipped source.
-8. Do not broad reverse-engineer the client. Use the canonical knowledge repo first and only investigate exact missing facts.
+### Known regressions / failed build history
+- CI #55: transport EOL mismatch after Windows `git apply`; source logic not implicated. Wrapper now canonicalizes LF before checksum.
+- CI #56: compile exposed accidental deletion of clean-v0.2.7 `PeriodicConfirmBusy()` and `HandleFightClicks()` while deleting adjacent StopAuto1 code. Both helpers were restored byte-for-byte from clean v0.2.7.
 
-## Verified Client Facts Used
-From canonical knowledge:
-- `Game.GetNearestItemPack(...)` / `Game.GetNearbyItemPack(...)` exist for item-pack discovery.
-- item packs expose at least `Type`, `RoleID`, `Position` in shipped Lua.
-- normal shipped auto pickup uses `MoveToEx` when distance >100, then `ClickToObject(RoleID)`.
-- shipped pick-all is `Game.PickUpItemFromItemPack(itemPackID,-1,1)`.
-- built-in auto pickup skips while `Game.HasBuff(30008009)` and mentions Càn Khôn Hồ.
+## Architecture / Hard Rules
+- Clean v0.2.7 is the only R2 source donor. **Do not import old v0.2.8/v0.2.9 code.**
+- Exactly two active reusable trade definitions remain: `mainTradeSequence_` and global `childTradeSequence_`.
+- MAIN `freeBagSpace <= 6` has sell priority in consolidation mode.
+- CON FULL exactly (`freeBagSpace == 0`) is the **entry gate only** for selecting a transaction child.
+- Eligible CON priority remains fixed CON1→CON6.
+- BĐPT owns all automatic physical clicks; raw REAL INPUT remains the only automatic click backend.
+- Exactly 2 `SendInput(` call sites must remain.
+- No `tradeGlobalFreeze_`; no `roundRobinCursor_`.
+- v0.2.5 persistent FREEZE ALL across actual sell-click sequence remains.
+- F4 is protected from redesign without new explicit user request/evidence.
 
-## Important Unknowns
-- Is `ItemPack.RoleID` identical to the `itemPackID` expected by direct pickup in all runtime cases?
-- Does server accept direct pickup when farther than normal pickup range and buff 30008009 is absent?
-- Does server acceptance change when buff 30008009 is present?
-- Does Càn Khôn Hồ use this same request path or a separate server-driven subsystem?
-- Is direct invocation from the validated message-hook context stable enough for this one-shot proof on the target build?
+## R2 Trade Rendezvous
+- Global `tradeRendezvous_` stores Map/X/Y; default tolerance 120.
+- On FULL CON selection, MAIN+CON are `tradeHeld` immediately and old training AutoPath is stopped.
+- Dedicated `tradeTravel*` state controls rendezvous movement; normal train target is not reused as the trade target.
+- First arrival waits and is kept off old-map AutoPath.
+- Sequence begins only after both snapshots confirm rendezvous readiness.
+- Map transition during fallback movement waits/retries instead of aborting solely because AutoFight was not stopped.
+- OFF/abort calls `ReleaseTradeHolds()` to clear all held participants and rendezvous state.
 
-## Current Test Order
-1. Validate Unity managed context.
-2. Resolve exact runtime loot method signatures.
-3. Scan nearest pack if signature is supported.
-4. Record buff 30008009 absent/present.
-5. At >100 distance, test `ClickToObject(RoleID)` with no movement call.
-6. At >100 distance, test `PickUpItemFromItemPack(candidate,-1,1)` with no movement call.
-7. Record pack/bag/movement/disconnect result.
-8. Repeat under the opposite Càn Khôn Hồ buff state.
+## Trade Sequence Groups
+- `TradeSequenceStep` gains `groupId` / `groupRepeat`.
+- One or more consecutive rows can be grouped; group repeat 1..999.
+- Existing row repeat remains nested inside each group cycle.
+- Copy/paste/move/delete normalize or remap groups.
 
-## Evidence Index
-- `EVID-001`: canonical shipped Lua/API knowledge establishes normal loot flow and direct semantic pickup call.
-- Runtime evidence for v0.1.0: pending user test.
+## Five Click Model
+Per-account points are now exactly:
+1. XÁC NHẬN RA MAP
+2. ĐẦU THAI
+3. AUTO
+4. ĐÁNH QUÁI
+5. DỪNG AUTO 2
 
-## Decisions
-- `DEC-001`: keep v0.1.0 one-shot and movement-free.
-- `DEC-002`: refuse to guess unsupported runtime signatures; print them and stop that probe.
-- `DEC-003`: if remote pickup passes, production implementation must use a proper action gate/MainThread dispatcher/state proof rather than preserving PoC shortcuts.
+Old `DỪNG AUTO 1` is removed because it is the same physical point as `AUTO`.
+
+## Failed / Unsafe Mechanisms
+- Do not restore per-CON `tradeSelectPoint`/`TradeSelect*` configuration.
+- Do not let repeated AutoFight-stop failure deadlock requested movement forever.
+- Do not delete/replace clean helper functions merely because they are adjacent to changed click code.
+- Do not change F4 while working on trade/rendezvous features.
+
+## Knowledge Index
+- Version: `docs/history/VERSION_v0.2.7-R2.md`
+- Feature: `docs/features/TRADE_RENDEZVOUS.md`
+- Bugs: `docs/bugs/BUG_REGISTRY.md`
+- Decisions: `docs/decisions/DECISIONS.md`
+- Evidence: `docs/evidence/EVIDENCE_REGISTRY.md`
+- Protocol application: `docs/protocol/PROTOCOL_V2_APPLIED.md`; the complete user-supplied Protocol V2 is also included verbatim in the source release archive.
