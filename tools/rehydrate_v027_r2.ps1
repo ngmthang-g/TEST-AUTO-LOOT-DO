@@ -50,6 +50,10 @@ try {
     Pop-Location
 }
 
+# git apply on Windows may honor checkout EOL settings; canonical source lineage is LF.
+$normalized = [IO.File]::ReadAllText($controller).Replace("`r`n", "`n")
+[IO.File]::WriteAllText($controller, $normalized, [Text.UTF8Encoding]::new($false))
+
 $finalHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
 if ($finalHash -ne '2124f79119754abfa95f320481b878239ae38c12810c7c85dbe963c44c41f09b') {
     throw "v0.2.7-R2 final controller SHA mismatch: $finalHash"
