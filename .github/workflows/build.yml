@@ -1,10 +1,9 @@
-name: build-item-consolidator-v027
+name: build-item-consolidator-v027-r2
 
 on:
   push:
     branches:
-      - main
-      - agent/item-consolidator-v0.2.7-shared-child-trade-sequence
+      - agent/item-consolidator-v0.2.7-r2-rendezvous-groups
   pull_request:
   workflow_dispatch:
 
@@ -13,9 +12,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Rehydrate exact source through v0.2.7
+      - name: Rehydrate exact clean v0.2.7 plus requested R2 patch
         shell: pwsh
-        run: .\tools\rehydrate_v159.ps1
+        run: .\tools\rehydrate_v027_r2.ps1
       - name: Configure x64
         run: cmake -S . -B build -A x64
       - name: Build Release
@@ -26,53 +25,72 @@ jobs:
         run: .\build\Release\rotation_logic_tests.exe
       - name: Exact trade scheduler self-test
         run: .\build\Release\trade_logic_tests.exe
-      - name: Static v0.2.7 shared MAIN/ACC-CON trade audit
+      - name: Static v0.2.7-R2 requested-only audit
         shell: pwsh
         run: |
           $c = Get-Content generated\donor159\src\controller.cpp -Raw
           foreach ($required in @(
-            'childTradeSequence_{}',
-            'ChildTradeSequence',
-            'EnsureSharedChildTradeSequence',
-            'SaveSharedChildTradeSequence',
-            'ACC CON ĐANG GD',
-            'CHUỖI GD ACC CON (DÙNG CHUNG)',
-            'GD ACC CON dùng chung',
-            'TradeSequenceReady(std::wstring& reason)',
-            'std::vector<TradeSequenceStep>& seq = childTradeSequence_',
-            'CON1→CON6',
+            'v0.2.7-R2',
+            'tradeRendezvous_',
+            'TradeRendezvousMap',
+            'TỌA GD • LẤY',
+            'BeginTradeRendezvousTravel',
+            'HandleTradeRendezvousTravel',
+            'tradeTravelReady',
+            'FULL exactly is the only entry gate',
+            'GroupSelectedTradeRows',
+            'UngroupSelectedTradeRows',
+            'sequenceGroupRepeatDone',
+            'GroupId',
+            'GroupRepeat',
+            'GOM DÒNG ĐÃ CHỌN',
+            'ClickSlot::AutoMenu',
+            'DỪNG AUTO 2',
+            'underworldFallbackRoute',
+            'trainRecoveryFallbackTravel',
+            'sellFallbackTravel',
             'DỒN ĐỒ: BẬT',
             'DỒN ĐỒ: TẮT',
-            'AcquireCoordinatorSequenceFreeze',
-            'ReleaseCoordinatorSequenceFreeze',
+            'ReleaseTradeHolds',
+            'ToggleGlobalPause',
             'CoordinatorClick',
             'SetForegroundWindow',
             'SetCursorPos',
-            'SendInput',
             'mainSellThreshold_ = 6',
             'childTriggerFreeSlots_ = 0'
           )) {
-            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.7 token: $required" }
+            if ($c -notmatch [regex]::Escape($required)) { throw "Missing R2 token: $required" }
           }
-          if ($c -match 'EnsureChildTradeSequence') { throw 'per-CON runtime sequence helper must be removed' }
-          if ($c -match 'std::vector<TradeSequenceStep>& seq = child\.profile\.childTradeSequence') { throw 'runtime must not execute per-CON profile workflow' }
-          $legacyRuntimeRefs = ([regex]::Matches($c, 'profile\.childTradeSequence')).Count
-          if ($legacyRuntimeRefs -ne 2) { throw "Legacy per-CON profile references should exist only in migration (expected 2, got $legacyRuntimeRefs)" }
-          if ($c -match 'tradeGlobalFreeze_') { throw 'obsolete whole-trade freeze must not return' }
-          if ($c -match 'roundRobinCursor_') { throw 'fixed CON1..CON6 priority required' }
+          foreach ($forbidden in @(
+            'tradeSelectPoint',
+            'TradeSelect',
+            'StopAuto1',
+            'tradeGlobalFreeze_',
+            'roundRobinCursor_'
+          )) {
+            if ($c -match [regex]::Escape($forbidden)) { throw "Forbidden/removed token returned: $forbidden" }
+          }
+          $fullEntry = ([regex]::Matches($c, 'if \(child->snapshot\.freeBagSpace > 0\) continue;')).Count
+          if ($fullEntry -ne 1) { throw "Expected exactly one CON FULL entry gate, got $fullEntry" }
           $rawSend = ([regex]::Matches($c, 'SendInput\(')).Count
           if ($rawSend -ne 2) { throw "Unexpected SendInput call count: $rawSend" }
-          Write-Host 'V0.2.7 SHARED MAIN / ACC CON TRADE STATIC AUDIT PASS'
+          $autoMenuEnum = ([regex]::Matches($c, 'AutoMenu = 2')).Count
+          if ($autoMenuEnum -ne 1) { throw "AUTO merged click slot invariant failed" }
+          if ($c -notmatch 'std::array<ClickPoint, 5>') { throw 'Expected exactly five per-account click points' }
+          Write-Host 'V0.2.7-R2 STATIC AUDIT PASS: rendezvous/groups/5-click/fallback/toggle/F4 invariants'
       - name: Stage artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force stage | Out-Null
-          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.7.exe
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.7-R2.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
           Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
           Copy-Item macros stage\macros -Recurse
-          Copy-Item docs\history\VERSION_v0.2.7.md stage\VERSION_v0.2.7.md
+          Copy-Item docs\history\VERSION_v0.2.7-R2.md stage\VERSION_v0.2.7-R2.md
+          Copy-Item docs\bugs\BUG_REGISTRY.md stage\BUG_REGISTRY.md
+          Copy-Item docs\decisions\DECISIONS.md stage\DECISIONS.md
+          Copy-Item docs\evidence\EVIDENCE_REGISTRY.md stage\EVIDENCE_REGISTRY.md
       - uses: actions/upload-artifact@v4
         with:
-          name: ThanLongItemConsolidator-v0.2.7-win-x64
+          name: ThanLongItemConsolidator-v0.2.7-R2-win-x64
           path: stage
