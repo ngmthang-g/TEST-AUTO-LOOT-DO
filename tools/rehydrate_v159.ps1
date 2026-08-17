@@ -154,4 +154,22 @@ Normalize-Lf $controller
 $v026ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
 if ($v026ControllerHash -ne '266d86aeaca97a0a6f63ce33ed2f543de1fd531a2be4d6d2eb9b7c940c320f5d') { throw "v0.2.6 controller SHA256 mismatch: $v026ControllerHash" }
 
-Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022=$v022ControllerHash v023=$v023ControllerHash v024=$v024ControllerHash v025=$v025ControllerHash v026patch=$v026PatchHash controller=$v026ControllerHash"
+$v027Archive = Join-Path $temp 'controller_v027_patch.tar.xz'
+Join-BinaryParts (Join-Path $root 'vendor\v027_patch_parts') 'part.*' $v027Archive
+$v027PatchHash = (Get-FileHash -Algorithm SHA256 $v027Archive).Hash.ToLowerInvariant()
+if ($v027PatchHash -ne '9a4e5737678bd9c951f318732fbafb3f2f08f7b07e9b8812424836029f7c37bb') { throw "v0.2.7 patch archive SHA256 mismatch: $v027PatchHash" }
+$v027Dir = Join-Path $temp 'v027'
+New-Item -ItemType Directory -Force $v027Dir | Out-Null
+& tar.exe -xJf $v027Archive -C $v027Dir
+if ($LASTEXITCODE -ne 0) { throw 'Failed to extract v0.2.7 patch tar.xz' }
+$v027PatchFile = Join-Path $v027Dir 'controller_v027.patch'
+Push-Location $root
+try {
+    & git apply --whitespace=nowarn --directory=generated/donor159 $v027PatchFile
+    if ($LASTEXITCODE -ne 0) { throw 'git apply failed for v0.2.7 shared child trade workflow patch' }
+} finally { Pop-Location }
+Normalize-Lf $controller
+$v027ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
+if ($v027ControllerHash -ne '397f1cf088ce0163cdba7aea06350cc25aff8aab4627e7def9331c9f1070845f') { throw "v0.2.7 controller SHA256 mismatch: $v027ControllerHash" }
+
+Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022=$v022ControllerHash v023=$v023ControllerHash v024=$v024ControllerHash v025=$v025ControllerHash v026=$v026ControllerHash v027patch=$v027PatchHash controller=$v027ControllerHash"

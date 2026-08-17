@@ -1,23 +1,29 @@
-# Thần Long Item Consolidator v0.2.6
+# Thần Long Item Consolidator v0.2.7
 
-Windows x64. v0.2.6 bổ sung **DỒN ĐỒ BẬT/TẮT** và khả năng lấy nguyên **CHUỖI CLICK BÁN ĐỒ** từ acc khác.
+Windows x64. v0.2.7 đơn giản hóa cấu hình giao dịch: từ nhiều workflow CON riêng thành đúng **2 bộ dữ liệu dùng chung**.
 
-## DỒN ĐỒ: BẬT
-- Giữ logic MAIN/CON hiện tại.
-- MAIN bán khi FreeBagSpace <= ngưỡng MAIN (mặc định 6).
-- CON chỉ được chọn giao dịch khi FULL đúng 0 ô.
-- Nhiều CON FULL giữ ưu tiên CON1 -> CON6.
-- Giao dịch vẫn qua BĐPT và chuỗi GD riêng/shared MAIN như các bản trước.
+## 1. CHUỖI GD MAIN
+- Là thư viện tọa độ MAIN dùng chung cho mọi giao dịch.
+- Các dòng MAIN #n chỉ cần sửa một lần.
 
-## DỒN ĐỒ: TẮT
-- Scheduler giao dịch MAIN↔CON dừng hoàn toàn; nếu đang có transaction thì abort và nhả HOLD.
-- Mỗi acc đang RUN trở thành auto train độc lập.
-- Bất kỳ acc nào FULL = 0 ô sẽ tự dừng đánh, chạy NPC bán, thực hiện chuỗi bán riêng, quay về bãi và tiếp tục train.
-- Trong mode độc lập, ngưỡng MAIN <=6 không dùng; tất cả acc bán theo FULL = 0.
-- Khi bắt đầu CHUỖI CLICK BÁN ĐỒ, BĐPT vẫn giữ SEQUENCE LEASE và FREEZE ALL xuyên suốt cả chuỗi như v0.2.5.
+## 2. CHUỖI GD ACC CON
+- Chỉ còn **một workflow global duy nhất** cho CON1 -> CON6.
+- Không còn `CHUỖI GD CON1`, `CON2`, ... riêng.
+- Khi BĐPT chọn MAIN giao dịch với CONn, mọi dòng `ACC CON` trong workflow sẽ chạy trên đúng cửa sổ CONn đang active.
+- Dòng tham chiếu `MAIN #n` vẫn chạy trên MAIN, vì workflow giao dịch có thể cần xen kẽ MAIN -> CON -> MAIN.
+- `CHUYỂN ĐỒ` luôn là thao tác của active CON.
 
-## LẤY CHUỖI BÁN CỦA ACC KHÁC
-`CHUỖI CLICK BÁN ĐỒ` mở được cho mọi acc. Trong editor có `LẤY CHUỖI CỦA ACC...`.
-Chọn một acc nguồn đã có chuỗi bán; tool copy nguyên các bước sang acc đang chỉnh. Nếu acc đích đã có chuỗi, tool hỏi xác nhận trước khi thay. ClickPoint giữ base size để scale theo cửa sổ acc đích.
+## REC / sửa chuỗi
+- Mở `CHUỖI GD ACC CON` từ bất kỳ CON nào. CON đang chọn chỉ là cửa sổ donor để REC/LẤY TỌA/TEST.
+- Tọa CON ghi được dùng cho toàn bộ CON1..CON6 và vẫn scale theo BaseW/BaseH.
+- REC vẫn có thể ghi xen kẽ click trên CON donor và MAIN; click MAIN được ánh xạ về thư viện `CHUỖI GD MAIN`.
 
-REC, copy/paste nhiều dòng, lấy 6 click, route/map/revive, FREEZE/BĐPT và Clean Route v1.5.9 giữ nguyên.
+## Migration từ v0.2.6
+Nếu chưa có section global `ChildTradeSequence`, v0.2.7 tự migrate một lần:
+1. ưu tiên workflow cũ của CON có slot thấp nhất đang tồn tại (CON1 -> CON6),
+2. nếu không có thì dùng template legacy cũ,
+3. lưu thành `ChildTradeSequence` global.
+
+Dữ liệu per-CON cũ vẫn được giữ trong profile để tương thích/rollback nhưng **không còn được runtime dùng**.
+
+DỒN ĐỒ BẬT/TẮT, auto-train độc lập khi OFF, chuỗi bán, FREEZE ALL xuyên suốt chuỗi bán, BĐPT, REC, 6 click riêng, route/map/revive và donor Clean Route v1.5.9 giữ nguyên.

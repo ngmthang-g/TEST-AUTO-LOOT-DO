@@ -1,17 +1,32 @@
-# PROJECT KNOWLEDGE — v0.2.6
+# PROJECT KNOWLEDGE — v0.2.7
 
-## Global consolidation mode
-`tradeEnabled_` is the persisted global consolidation-mode flag (`Global/TradeEnabled` for backward compatibility).
-- ON: existing MAIN/CON consolidation rules apply.
-- OFF: `TickTradeCoordinator` is inert and every running account is treated as an independent auto-train/sell account. Full-bag sell trigger is `FreeBagSpace <= 0` for all roles; MAIN <=6 threshold is ignored in OFF mode.
+## Trade sequence model: exactly two reusable definitions
+Active runtime trade configuration has only:
+1. `mainTradeSequence_`: shared MAIN coordinate library.
+2. `childTradeSequence_`: one global ordered ACC CON workflow shared by CON1..CON6.
 
-Toggling OFF aborts any active trade and releases trade holds. It does not cancel an already-running sell workflow.
+There is no active per-CON workflow selection anymore. `AccountProfile::childTradeSequence` is legacy migration/rollback data only.
 
-## Independent sell invariant
-Auto-sell uses the same donor route/recovery and BĐPT path as before. The physical sell macro still obtains `coordinatorSequenceFreeze_` at sell phase 6 and keeps FREEZE ALL through the entire sell click sequence, including delays.
+## Active child binding
+The global child workflow still supports two row targets:
+- `target=0`: execute on the **currently active transaction child** (`tradeTxn_.childPid`). This is the CON selected by fixed CON1->CON6 priority.
+- `target=1`: execute the referenced `MAIN #n` shared step on MAIN.
 
-## Sell macro portability
-The sell editor is accessible for every selected account. `CopySellSequenceFromAnotherAccount` replaces the target profile's `sellMacro` with the source profile's full vector after confirmation. ClickPoint base dimensions are preserved for runtime scaling.
+This preserves required MAIN/CON interleaving while eliminating duplicate CON1..CON6 workflow data. `CHUYỂN ĐỒ` remains CON-only.
 
-## Existing invariants
-REC remains configuration-only and freezes automation. All automation physical clicks still pass through `CoordinatorClick`/REAL INPUT. Fixed CON1→CON6 priority remains when consolidation is ON.
+## Shared child persistence
+Global section: `ChildTradeSequence`.
+`SaveSharedChildTradeSequence()` persists it. `EnsureSharedChildTradeSequence()` performs one-time migration only when the global section does not exist.
+
+Migration priority is deterministic: first non-empty legacy per-CON workflow in CON1->CON6 order; otherwise the legacy combined template. Once the global section exists, even with Count=0, migration will not re-run.
+
+## Editor / REC semantics
+`CHUỖI GD ACC CON` is global. A selected CON is only the donor window for REC, coordinate capture and test. Recorded CON coordinates are stored once and used by whichever CON is active in a real trade; BaseW/BaseH scaling remains authoritative.
+
+## Preserved invariants
+- DỒN ĐỒ ON/OFF behavior from v0.2.6 is unchanged.
+- Fixed CON1->CON6 eligibility priority remains.
+- MAIN <=6 sell priority and CON FULL==0 trigger remain in consolidation ON mode.
+- All automatic physical clicks still pass through BĐPT / `CoordinatorClick` / REAL INPUT.
+- Exactly two `SendInput(` call sites remain (LEFTDOWN/LEFTUP in the raw click function).
+- v0.2.5 sell-sequence persistent FREEZE ALL remains unchanged.
