@@ -1,0 +1,43 @@
+--- a/generated/donor159/src/controller.cpp
++++ b/generated/donor159/src/controller.cpp
+@@ -2637,19 +2637,33 @@
+ 
+     void DeleteTradeSequenceRow() {
+         std::vector<TradeSequenceStep>* seq = EditorSequence();
+-        const int row = SelectedTradeSequenceIndex();
+-        if (!seq || row < 0 || row >= static_cast<int>(seq->size())) return;
+-        seq->erase(seq->begin() + row);
++        std::vector<int> rows = SelectedRows(tradeSeqList_);
++        if (!seq || rows.empty()) return;
++        rows.erase(std::remove_if(rows.begin(), rows.end(), [&](int row) {
++            return row < 0 || row >= static_cast<int>(seq->size());
++        }), rows.end());
++        if (rows.empty()) return;
++        std::sort(rows.begin(), rows.end());
++
+         if (tradeEditorMode_ == 1) {
+-            for (std::size_t i = 0; i < mainTradeSequence_.size(); ++i) mainTradeSequence_[i].mainRef = static_cast<int>(i);
+-            // Repair the one shared ACC CON workflow: deleted ref is invalidated; higher refs shift down.
++            // Repair the one shared ACC CON workflow against all deleted MAIN refs before erasing rows.
+             EnsureSharedChildTradeSequence();
+             for (TradeSequenceStep& cs : childTradeSequence_) if (cs.target == 1) {
+-                if (cs.mainRef == row) cs.mainRef = -1; else if (cs.mainRef > row) --cs.mainRef;
++                if (std::binary_search(rows.begin(), rows.end(), cs.mainRef)) {
++                    cs.mainRef = -1;
++                } else {
++                    cs.mainRef -= static_cast<int>(std::lower_bound(rows.begin(), rows.end(), cs.mainRef) - rows.begin());
++                }
+             }
+             SaveSharedChildTradeSequence();
+         }
+-        if (tradeEditorMode_ == 2) NormalizeTradeGroups(*seq);
++
++        for (auto it = rows.rbegin(); it != rows.rend(); ++it) seq->erase(seq->begin() + *it);
++        if (tradeEditorMode_ == 1) {
++            for (std::size_t i = 0; i < mainTradeSequence_.size(); ++i) mainTradeSequence_[i].mainRef = static_cast<int>(i);
++        } else if (tradeEditorMode_ == 2) {
++            NormalizeTradeGroups(*seq);
++        }
+         SaveEditorSequence();
+         RefreshTradeSequenceList();
+     }
