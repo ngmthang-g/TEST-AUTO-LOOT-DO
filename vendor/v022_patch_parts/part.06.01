@@ -1,0 +1,30 @@
+tured));
++            }
++        } else if (captureTradeSequenceIndex_ >= 0) {
++            if (captureTradeSequenceIndex_ >= static_cast<int>(tradeSequence_.size())) {
++                Log(L"F8 chuỗi GD thất bại: dòng đã bị xóa.");
+             } else {
+-                a->profile.sellMacro[static_cast<std::size_t>(captureMacroIndex_)].point = captured;
+-                SaveProfile(a->profile);
+-                LogAccount(*a, L"Đã lưu macro dòng " + std::to_wstring(captureMacroIndex_ + 1) + L" = " + PointDescription(captured));
++                tradeSequence_[static_cast<std::size_t>(captureTradeSequenceIndex_)].point = captured;
++                SaveTradeSequence();
++                RefreshTradeSequenceList();
++                LogAccount(*captureAccount, L"Đã lưu chuỗi GD dòng " + std::to_wstring(captureTradeSequenceIndex_ + 1) + L" = " + PointDescription(captured));
++            }
++        } else if (captureMacroIndex_ >= 0) {
++            if (captureMacroIndex_ >= static_cast<int>(captureAccount->profile.sellMacro.size())) {
++                LogAccount(*captureAccount, L"F8 macro thất bại: dòng đã bị xóa.");
++            } else {
++                captureAccount->profile.sellMacro[static_cast<std::size_t>(captureMacroIndex_)].point = captured;
++                SaveProfile(captureAccount->profile);
++                LogAccount(*captureAccount, L"Đã lưu macro dòng " + std::to_wstring(captureMacroIndex_ + 1) + L" = " + PointDescription(captured));
+             }
+         } else {
+             const int index = static_cast<int>(captureSlot_);
+             if (index >= 0 && index < 6) {
+-                a->profile.points[static_cast<std::size_t>(index)] = captured;
+-                SaveProfile(a->profile);
+-                LogAccount(*a, L"Đã lưu " + std::wstring(kClickLabels[static_cast<std::size_t>(index)]) + L" = " + PointDescription(captured));
++                captureAccount->profile.points[static_cast<std::size_t>(index)] = captured;
++                SaveProfile(captureAc

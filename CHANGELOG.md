@@ -1,34 +1,20 @@
 # CHANGELOG
 
-## [v0.1.0] - 2026-08-16
+## v0.2.7
+- Replaced per-CON trade workflows with one global `CHUỖI GD ACC CON` shared by CON1..CON6.
+- Runtime now binds every CON-targeted row to the active transaction child selected by BĐPT.
+- Kept `CHUỖI GD MAIN` as the shared MAIN coordinate library; shared CON workflow can still reference MAIN #n so interleaved MAIN/CON trade order is preserved.
+- `CHUYỂN ĐỒ` remains active-CON-only.
+- REC/LẤY TỌA/TEST for the shared child workflow use the currently selected CON as a donor window; saved coordinates then apply to every CON.
+- Added one-time deterministic migration from old per-CON workflows, prioritizing CON1 -> CON6.
+- Moved the shared ACC CON button to the MAIN-sequence button slot for CON roles so it no longer overlaps `CHUỖI CLICK BÁN ĐỒ`.
+- Preserved v0.2.6 DỒN ĐỒ toggle/independent auto-train mode and all BĐPT/FREEZE invariants.
 
-### Requested
-- Build a very small independent RemoteLoot PoC to determine which loot action the server accepts at distance.
-- Prioritize proof of direct remote pickup before building a complete tool.
-
-### Added / Changed
-- Windows x64 C++ controller and injected `WH_GETMESSAGE` bridge.
-- Runtime IL2CPP semantic resolver for loot APIs.
-- Unity managed-context validation.
-- Nearest ItemPack probe when runtime signature is supported without guessing.
-- One-shot `ClickToObject(RoleID)` test with no PoC movement call.
-- One-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call.
-- `HasBuff(30008009)` Càn Khôn Hồ state probe.
-- `GetFreeBagSpace()` before/after auxiliary pickup proof plus nearest-pack rescan.
-- GitHub Actions Windows x64 build/artifact workflow.
-- Project knowledge and runtime test procedure.
-
-### Build
-- Final code commit tested by CI: `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e`.
-- GitHub Actions run: `#8` / run ID `31941065682`.
-- Final: `BUILD PASS` / `CI PASS` on Windows x64.
-- Artifact workflow packages `RemoteLootProbe.exe`, `RemoteLootBridge.dll`, and README.
-
-### Runtime
-- Status: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN`.
-- Càn Khôn Hồ remote-loot mechanism: `UNKNOWN`.
-
-### Next Version Notes
-- Do not add automation loops yet.
-- First collect repeatable runtime evidence for distant `ClickToObject` and direct pick-all with buff 30008009 absent/present.
+## v0.2.6
+- Added `DỒN ĐỒ: BẬT/TẮT` push-button mode switch.
+- DỒN ĐỒ OFF disables MAIN↔CON transactions and makes every running account auto-train/sell independently on FULL = 0.
+- MAIN <=6 threshold is used only while DỒN ĐỒ is ON.
+- Turning DỒN ĐỒ OFF aborts an active trade and releases trade holds.
+- `CHUỖI CLICK BÁN ĐỒ` is accessible for every selected account.
+- Added `LẤY CHUỖI CỦA ACC...` to clone the complete sell-click sequence from another scanned account.
+- Preserved persistent FREEZE ALL across the whole sell click sequence.
