@@ -29,6 +29,9 @@ add_executable(ThanLongItemConsolidator WIN32
 target_include_directories(ThanLongItemConsolidator PRIVATE "${DONOR_DIR}/src" "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_definitions(ThanLongItemConsolidator PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
 target_link_libraries(ThanLongItemConsolidator PRIVATE comctl32 user32 kernel32 gdi32)
+# The exact v1.5.9 donor resource already embeds RT_MANIFEST id=1.
+# Disable the linker-generated manifest to avoid duplicate resource CVT1100.
+target_link_options(ThanLongItemConsolidator PRIVATE /MANIFEST:NO)
 
 add_executable(route_logic_tests "${DONOR_DIR}/src/route_logic_test.cpp")
 target_include_directories(route_logic_tests PRIVATE "${DONOR_DIR}/src")
