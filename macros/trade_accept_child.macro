@@ -1,2 +1,5 @@
-# trade_accept_child — CHILD accepts MAIN trade invitation.
+# trade_accept_child
+# Runtime coordinates are normalized 0..1 and auto-scale to each game client.
+# Supported: sleep ms | click x y [repeat] [interval_ms] [after_ms] | grid left top cols rows step_x step_y count [interval_ms] [after_ms]
+# Delete UNCONFIGURED and enter the tested click sequence before enabling unattended trade.
 UNCONFIGURED

@@ -1,6 +1,5 @@
 # trade_give_items_child
-# Use a grid step after measuring the real trade item grid.
-# Runtime caps grid clicks dynamically from MAIN free capacity.
-# Example only:
-# grid 0.600000 0.300000 10 9 0.035000 0.055000 90 120 300
+# Runtime coordinates are normalized 0..1 and auto-scale to each game client.
+# Supported: sleep ms | click x y [repeat] [interval_ms] [after_ms] | grid left top cols rows step_x step_y count [interval_ms] [after_ms]
+# Delete UNCONFIGURED and enter the tested click sequence before enabling unattended trade.
 UNCONFIGURED
