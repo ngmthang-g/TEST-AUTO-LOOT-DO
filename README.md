@@ -1,36 +1,17 @@
-# ThanLong Item Consolidator v0.2.0
+# ThanLong Item Consolidator v0.2.1
 
-v0.2.0 replaces the v0.1 console prototype with the proven Win32 GUI/client-management/death-route foundation from the supplied ThanLong Clean Route v1.5.9 source.
+Core donor: ThanLong Clean Route v1.5.9.
 
-## What is implemented
+Exact coordinator rules:
+- MAIN and every CON use the original v1.5.9 death/revive/route-to-train state machine.
+- MAIN FreeBagSpace <= 6: Auto Sell has absolute priority; no trade may start. Threshold remains editable but defaults to 6.
+- CON eligible only when FreeBagSpace == 0 (FULL).
+- If multiple CON are FULL, fixed priority is CON1 -> CON2 -> ... -> CON6; no round-robin.
+- Preparation order: hold MAIN, stop AutoFight + route MAIN to its selected train target; then do the same for selected CON.
+- Only after both are alive, at their selected train target, dismounted, AutoPath OFF and AutoFight OFF does the atomic trade chain start.
+- `trade_invite_N.macro` is MAIN-side child-N target selection/trade-open macro. Configure its first click as the custom coordinate used by MAIN to select that child.
+- During Invite/Accept/Give/ConfirmChild/ConfirmMain the whole automation is frozen. Read-only state still refreshes, but death/revive/map-confirm/route/sell/fight cannot preempt.
+- After ConfirmMain completes, the freeze is released. Then the normal v1.5.9 priority handles any pending death/revive/map confirmation/route state before fighting resumes.
+- Runtime clicks remain background PostMessage; no physical cursor capture.
 
-- Real Win32 GUI: the EXE opens even with zero game clients.
-- Multi-client scan with character/RoleID, PID, state, Map/X/Y and authoritative `FreeBagSpace`.
-- Per-account role persisted by RoleID: `MAIN`, `CON 1` ... `CON 6`, or off.
-- Exactly one MAIN/CHILD trade transaction at a time.
-- Round-robin selection of CHILD accounts when `FreeBagSpace <= child threshold`.
-- MAIN blocks new trades when `FreeBagSpace < MAIN sell threshold` and gives existing Auto Sell priority.
-- CHILD roles are hard-disabled from Auto Sell.
-- Cooperative trade macro runner: death/map transition is still observed between macro steps; an unsafe pair aborts and releases the lock so donor death/route recovery can resume.
-- Runtime UI clicks use background `PostMessage` mouse messages. No `SetCursorPos`, no `SendInput`, no foreground steal.
-- Trade macro coordinates are normalized 0..1 and auto-scale per client window.
-- `trade_give_items_child` is dynamically click-capped by MAIN remaining capacity.
-
-## Donor behavior preserved
-
-The supplied v1.5.9 bridge and controller state machine remain the source for identity, death/life, map, position, AutoFight and free bag state, including death-session cold restart, Underworld recovery, route ownership reacquire and return-to-train logic.
-
-## First runtime test
-
-1. Keep `ThanLongItemConsolidator_v0.2.0.exe` and `ThanLongCleanRouteBridge.dll` together.
-2. Open two visible game clients.
-3. Run the EXE and press `QUÉT CLIENT`.
-4. Select one row and assign `MAIN`; select the other and assign `CON 1`.
-5. Configure the same train spot and the existing revive/auto points as in Clean Route v1.5.9.
-6. Edit the macros in `macros/` with the tested trade click coordinates/order. Remove `UNCONFIGURED` only from macros that are actually ready.
-7. Press `NẠP MACRO`, tick both accounts, then `BẮT ĐẦU ACC TICK`.
-8. First prove one MAIN + one CHILD. Add CON2..CON6 only after background click works reliably at two window sizes.
-
-## Important runtime proof still required
-
-Compile/CI success cannot prove Unity accepts `PostMessage` for every UI button. If a specific button ignores background messages, test and document that exact control before expanding the click backend; do not silently fall back to physical-mouse `SendInput`.
+Trade macro files are under `macros/`. They stay fail-closed while containing `UNCONFIGURED`.

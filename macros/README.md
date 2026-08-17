@@ -1,13 +1,15 @@
-# Trade macro configuration v0.2.0
+# Trade macros v0.2.1
 
-The GUI always opens even when these macros are not configured. The coordinator simply shows `macro ... chưa cấu hình` and does not start a trade.
+All macro coordinates are normalized `0..1` and executed with background PostMessage.
 
-Required common macros: `stop_train`, `move_anchor`, `trade_accept_child`, `trade_give_items_child`, `trade_confirm_child`, `trade_confirm_main`, `start_train`.
-Required MAIN invite macro for each configured child slot: `trade_invite_1` ... `trade_invite_6`.
+`trade_invite_1.macro` ... `trade_invite_6.macro` are MAIN-side, child-specific macros. The first click should be the custom coordinate that selects that CON; subsequent clicks may open the trade UI. Add/delete as many `click` / `sleep` steps as needed.
 
-DSL:
-- `sleep 800`
-- `click 0.5000 0.7500 1 80 300`
-- `grid 0.4200 0.3300 5 6 0.0550 0.0600 9 100 300`
+Then the fixed target-window phases are:
+- `trade_accept_child.macro`
+- `trade_give_items_child.macro`
+- `trade_confirm_child.macro`
+- `trade_confirm_main.macro`
 
-`trade_give_items_child` receives a dynamic maximum click count based on current MAIN free slots and the configured MAIN sell threshold.
+`stop_train`, `move_anchor`, and `start_train` are no longer used by the trade coordinator. Stopping AutoFight and returning to the train coordinate are performed by the donor v1.5.9 route/recovery logic.
+
+Keep `UNCONFIGURED` in every macro that has not been tested. A required macro containing it will block the trade safely.
