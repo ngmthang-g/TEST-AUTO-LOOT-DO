@@ -1,0 +1,38 @@
+c CON đang train • chưa có CON FULL");
+     }
+ 
+     void ClearEditor() {
+         SetText(selected_, L"ACC ĐANG CHỈNH: chưa chọn");
+         SetText(live_, L"STATE: chưa có");
+         if (tradeRoleCombo_) SendMessageW(tradeRoleCombo_, CB_SETCURSEL, 0, 0);
++        if (tradeSelectPointLabel_) SetText(tradeSelectPointLabel_, L"chọn một CON");
+         SetText(targetName_, L"");
+         if (spotCombo_) SendMessageW(spotCombo_, CB_SETCURSEL, -1, 0);
+         SetText(targetText_, L"CHƯA CHỌN");
+@@ -2031,6 +2460,10 @@ private:
+         ResolveProfileTarget(a->profile);
+         SetText(selected_, L"ACC ĐANG CHỈNH: " + AccountTag(*a));
+         if (tradeRoleCombo_) SendMessageW(tradeRoleCombo_, CB_SETCURSEL, a->profile.tradeRole, 0);
++        if (tradeSelectPointLabel_) {
++            if (a->profile.tradeRole >= 2) SetText(tradeSelectPointLabel_, PointDescription(a->profile.tradeSelectPoint));
++            else SetText(tradeSelectPointLabel_, L"chỉ dùng cho CON1..CON6");
++        }
+         RefreshSpotCombo();
+         RefreshRotationList();
+         SetText(targetName_, a->profile.selectedSpot);
+@@ -2136,11 +2569,39 @@ private:
+                        std::to_wstring(s.x) + L"," + std::to_wstring(s.y));
+     }
+ 
++    void BeginTradeSelectCapture() {
++        Account* child = SelectedAccount();
++        Account* main = AccountByTradeRole(1);
++        if (!child || child->profile.tradeRole < 2) { Log(L"Tọa chọn CON: hãy chọn một acc đã gán CON1..CON6."); return; }
++        if (!main || !IsWindow(main->game.window)) { Log(L"Tọa chọn CON: chưa có MAIN/cửa sổ MAIN."); return; }
++        captureSlot_ = ClickSlot::None;
++        captureMacroIndex_ = -1;
++        captureTradeSequenceIndex_ = -1;
++        captureTradeSelectChildPid_ = child->game.pid;
++        capturePid_ = main->game.pid;
++        LogAccount(*main, L"Đang lấy tọa MAIN dùng để chọn " + TradeRoleLabel(child->profile.tradeRole) + L" • đưa chuột vào vị trí nhân vật CON rồi F8.");
++       

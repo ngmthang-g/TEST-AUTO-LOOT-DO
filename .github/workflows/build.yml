@@ -1,10 +1,10 @@
-name: build-item-consolidator-v021
+name: build-item-consolidator-v022
 
 on:
   push:
     branches:
       - main
-      - agent/item-consolidator-v0.2.1-exact-trade-logic
+      - agent/item-consolidator-v0.2.2-real-input-coordinator
   pull_request:
   workflow_dispatch:
 
@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Rehydrate exact Clean Route v1.5.9 donor + v0.2.1 patch
+      - name: Rehydrate exact Clean Route v1.5.9 + v0.2.1 + v0.2.2 REAL INPUT patch
         shell: pwsh
         run: .\tools\rehydrate_v159.ps1
       - name: Configure x64
@@ -26,25 +26,39 @@ jobs:
         run: .\build\Release\rotation_logic_tests.exe
       - name: Exact trade scheduler self-test
         run: .\build\Release\trade_logic_tests.exe
-      - name: Static exact-trade audit
+      - name: Static v0.2.2 REAL INPUT coordinator audit
         shell: pwsh
         run: |
           $c = Get-Content generated\donor159\src\controller.cpp -Raw
-          foreach ($required in @('mainSellThreshold_ = 6','childTriggerFreeSlots_ = 0','tradeGlobalFreeze_','PrepareMain','PrepareChild','freeBagSpace <= mainSellThreshold_','freeBagSpace <= 0','trade_invite_')) {
-            if ($c -notmatch [regex]::Escape($required)) { throw "Missing exact-trade token: $required" }
+          foreach ($required in @(
+            'mainSellThreshold_ = 6',
+            'childTriggerFreeSlots_ = 0',
+            'tradeGlobalFreeze_ = true',
+            'PrepareMain',
+            'PrepareChild',
+            'tradeSelectPoint',
+            'TradeSequence',
+            'BỘ ĐIỀU PHỐI TRUNG TÂM',
+            'SetForegroundWindow',
+            'SetCursorPos',
+            'SendInput',
+            'freeBagSpace <= mainSellThreshold_',
+            'freeBagSpace <= 0'
+          )) {
+            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.2 token: $required" }
           }
-          if ($c -match 'roundRobinCursor_') { throw 'Round-robin must not exist in v0.2.1 exact priority coordinator' }
-          Write-Host 'EXACT TRADE STATIC AUDIT PASS'
+          if ($c -match 'roundRobinCursor_') { throw 'Round-robin must not exist; CON1..CON6 fixed priority is required' }
+          Write-Host 'V0.2.2 REAL INPUT COORDINATOR STATIC AUDIT PASS'
       - name: Stage artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force stage | Out-Null
-          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.1.exe
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.2.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
           Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
           Copy-Item macros stage\macros -Recurse
-          Copy-Item docs\history\VERSION_v0.2.1.md stage\VERSION_v0.2.1.md
+          Copy-Item docs\history\VERSION_v0.2.2.md stage\VERSION_v0.2.2.md
       - uses: actions/upload-artifact@v4
         with:
-          name: ThanLongItemConsolidator-v0.2.1-win-x64
+          name: ThanLongItemConsolidator-v0.2.2-win-x64
           path: stage

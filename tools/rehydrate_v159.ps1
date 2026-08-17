@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $vendor = Join-Path $root 'vendor\donor159'
+$v022Vendor = Join-Path $root 'vendor\v022_patch_parts'
 $generated = Join-Path $root 'generated\donor159'
 $temp = Join-Path $root 'generated\_rehydrate'
 
@@ -55,7 +56,20 @@ try {
 } finally { Pop-Location }
 
 Normalize-Lf $controller
-$controllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
-if ($controllerHash -ne '66e2fe61418405b666f3afa4d0aebc5609fb482c692407642b8d5838bdc47162') { throw "Patched controller SHA256 mismatch: $controllerHash" }
+$v021ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
+if ($v021ControllerHash -ne '66e2fe61418405b666f3afa4d0aebc5609fb482c692407642b8d5838bdc47162') { throw "v0.2.1 controller SHA256 mismatch: $v021ControllerHash" }
 
-Write-Host "REHYDRATE PASS donor=$donorHash patch=$patchHash controller=$controllerHash"
+$v022Patch = Join-Path $temp 'controller_v022.patch'
+Join-BinaryParts $v022Vendor 'part.*' $v022Patch
+$v022PatchHash = (Get-FileHash -Algorithm SHA256 $v022Patch).Hash.ToLowerInvariant()
+if ($v022PatchHash -ne '65bafda2c9980f67c1202be01ca1391bd68b73685cc451e8b8130c8c80ddb32b') { throw "v0.2.2 patch SHA256 mismatch: $v022PatchHash" }
+Push-Location $root
+try {
+    & git apply --whitespace=nowarn --directory=generated/donor159 $v022Patch
+    if ($LASTEXITCODE -ne 0) { throw 'git apply failed for v0.2.2 REAL INPUT coordinator patch' }
+} finally { Pop-Location }
+Normalize-Lf $controller
+$v022ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
+if ($v022ControllerHash -ne '732fcfdd6ab497b1f1da442ec94b63a5f63a2d5757a8fcb8b5c9ee9efc5a1066') { throw "v0.2.2 controller SHA256 mismatch: $v022ControllerHash" }
+
+Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022patch=$v022PatchHash controller=$v022ControllerHash"
