@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v0.2.9
+- Added global MAIN `TỌA TỔ ĐỘI` capture via F8; every trade round opens party/member panel before clicking the per-CON face coordinate.
+- Separated trade rendezvous route state from `trainRecoveryPhase` into dedicated `tradeRendezvousPhase` ownership.
+- Added GD LOCK: after reaching TỌA GD, StopPath + standing-state verification are required; active trade phases block clicks if AutoPath reappears and abort if a participant actually leaves the rendezvous.
+- Fixed MAIN mid-session sell bug: normal sell phase 8 no longer routes MAIN back to training during `DrainMainSell`; MAIN returns directly to TỌA GD and resumes the pinned child.
+- Kept the child hard-locked at TỌA GD while MAIN sells.
+- Hardened F4 pause with `GetAsyncKeyState(VK_F4)` edge fallback plus 350 ms debounce in addition to RegisterHotKey.
+- Preserved FULL-only entry, per-CON drain target, grouped repeats, fixed CON priority, BĐPT REAL INPUT and exactly two SendInput call sites.
+
 ## v0.2.8
 - Added one global user-captured `TỌA ĐỘ GIAO DỊCH`; MAIN and selected CON both stop AutoFight and route there before a trade round starts.
 - Added fail-closed death/map/state checks around rendezvous, selection, trade sequence and child verification.

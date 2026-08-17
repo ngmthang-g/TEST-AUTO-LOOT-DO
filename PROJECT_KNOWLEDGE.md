@@ -1,3 +1,26 @@
+# PROJECT KNOWLEDGE — v0.2.9
+
+## Critical correction: trade rendezvous owns its own route state
+`trainRecoveryPhase` is TRAIN ownership only. v0.2.9 introduces `RuntimeState::tradeRendezvousPhase/tradeRendezvousTick/tradeRendezvousStopAttempts` for trade travel. Never reuse trainRecovery for TỌA GD again. Active MAIN + child are `tradeHeld`, and generic `TickAccount` must not route them.
+
+At TỌA GD, arrival is not enough: StopPath is sent and `TradeAccountStandingAtRendezvous()` must prove life/map/position/AutoFight/AutoPath/riding are authoritative, AutoFight=OFF, AutoPath=OFF, riding=OFF, and position inside rendezvous tolerance. `MaintainTradeRendezvousLock()` gates OpenParty, SelectChild, Sequence and Verify. If AutoPath reappears, StopPath is sent and the next click is withheld. Actual departure from the rendezvous aborts fail-closed.
+
+## Party-open prerequisite
+Global `tradePartyPoint_` belongs to MAIN and persists under Global `TradePartyX/Y/W/H/Valid`. Capture path: select any CON -> `TỌA TỔ ĐỘI` -> hover MAIN party/member-panel button -> F8. Runtime order for every round is fixed:
+`pair GD LOCK -> MAIN party point -> delay -> per-CON MAIN face/select point -> shared ACC CON workflow`.
+Per-CON face coordinates remain profile-specific; only the party-open point is global.
+
+## Main sell inside a pinned child-drain session
+The normal Auto Sell phase 8 routes back to the training target. That is forbidden while `tradeTxn_.phase == DrainMainSell`. After bag-space verification, MAIN's sell state must terminate at sellPhase=0 without return-to-train; TickTradeCoordinator then starts dedicated trade-rendezvous travel back to TỌA GD. The child remains GD LOCK at TỌA GD the whole time. Only FinishTrade/AbortTrade releases holds.
+
+## F4 pause reliability
+F4 has two input paths: registered global `WM_HOTKEY` and `GetAsyncKeyState(VK_F4)` edge fallback. Both feed `HandlePauseHotkeySignal()` with 350 ms debounce to avoid double toggles. PAUSE gates `TickAccount` and `TickTradeCoordinator`, sends StopPath to RUN accounts, and preserves the current transaction state for resume.
+
+## Preserved v0.2.8 invariants
+FULL==0 is only the session-entry gate; the same childPid stays pinned until `freeSlots >= childTargetFreeSlots`. Grouped sequence repeats, round-wide transfer budget, shared MAIN + single global ACC CON workflow, fixed CON1->CON6 priority, DỒN ĐỒ OFF mode, sell-sequence FREEZE ALL and exactly two raw SendInput calls remain mandatory.
+
+---
+
 # PROJECT KNOWLEDGE — v0.2.8
 
 ## Core trade-session invariant

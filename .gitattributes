@@ -6,3 +6,4 @@ vendor/v025_patch_parts/* -text
 vendor/v026_patch_parts/* -text
 vendor/v027_patch_parts/* -text
 vendor/v028_patch_parts/* -text
+vendor/v029_patch_parts/* -text
