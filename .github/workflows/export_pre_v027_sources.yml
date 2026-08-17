@@ -1,0 +1,21 @@
+name: export-pre-v027-source-lineage
+
+on:
+  push:
+    branches:
+      - agent/export-pre-v027-lineage-sources
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact pre-v0.2.7 source lineage
+        shell: pwsh
+        run: .\tools\export_pre_v027_sources.ps1
+      - name: Upload exact source lineage
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThanLongItemConsolidator-pre-v0.2.7-exact-sources
+          path: export\pre_v027_sources
