@@ -1,10 +1,10 @@
-name: build-item-consolidator-v027
+name: build-item-consolidator-v028
 
 on:
   push:
     branches:
       - main
-      - agent/item-consolidator-v0.2.7-shared-child-trade-sequence
+      - agent/item-consolidator-v0.2.8-rendezvous-group-drain
   pull_request:
   workflow_dispatch:
 
@@ -13,9 +13,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Rehydrate exact source through v0.2.7
+      - name: Rehydrate exact source through v0.2.8
         shell: pwsh
-        run: .\tools\rehydrate_v159.ps1
+        run: .\tools\rehydrate_v028.ps1
       - name: Configure x64
         run: cmake -S . -B build -A x64
       - name: Build Release
@@ -26,21 +26,35 @@ jobs:
         run: .\build\Release\rotation_logic_tests.exe
       - name: Exact trade scheduler self-test
         run: .\build\Release\trade_logic_tests.exe
-      - name: Static v0.2.7 shared MAIN/ACC-CON trade audit
+      - name: Static v0.2.8 rendezvous/group/drain audit
         shell: pwsh
         run: |
           $c = Get-Content generated\donor159\src\controller.cpp -Raw
           foreach ($required in @(
+            'TradeRendezvousMap',
+            'CaptureTradeRendezvous',
+            'HandleTradeRendezvousTravel',
+            'TradeAccountStandingAtRendezvous',
+            'TradeSessionPairSafe',
+            'TỌA ĐỘ GIAO DỊCH',
+            'TradeDrainTargetFreeSlots',
+            'tradeDrainTargetFreeSlots',
+            'childTargetFreeSlots',
+            'freeBagSpace != 0',
+            'freeSlots >= tradeTxn_.childTargetFreeSlots',
+            'VerifyChild',
+            'DrainMainSell',
+            'groupId',
+            'groupRepeat',
+            'NormalizeTradeGroups',
+            'AdvanceTradeSequenceIndex',
+            'GOM DÒNG ĐÃ CHỌN',
+            'BỎ NHÓM',
+            'roundTransferClicks',
+            'roundTransferBudget',
+            'chuỗi ACC CON chưa có bước CHUYỂN ĐỒ',
             'childTradeSequence_{}',
-            'ChildTradeSequence',
-            'EnsureSharedChildTradeSequence',
-            'SaveSharedChildTradeSequence',
             'ACC CON ĐANG GD',
-            'CHUỖI GD ACC CON (DÙNG CHUNG)',
-            'GD ACC CON dùng chung',
-            'TradeSequenceReady(std::wstring& reason)',
-            'std::vector<TradeSequenceStep>& seq = childTradeSequence_',
-            'CON1→CON6',
             'DỒN ĐỒ: BẬT',
             'DỒN ĐỒ: TẮT',
             'AcquireCoordinatorSequenceFreeze',
@@ -52,27 +66,24 @@ jobs:
             'mainSellThreshold_ = 6',
             'childTriggerFreeSlots_ = 0'
           )) {
-            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.7 token: $required" }
+            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.8 token: $required" }
           }
-          if ($c -match 'EnsureChildTradeSequence') { throw 'per-CON runtime sequence helper must be removed' }
-          if ($c -match 'std::vector<TradeSequenceStep>& seq = child\.profile\.childTradeSequence') { throw 'runtime must not execute per-CON profile workflow' }
-          $legacyRuntimeRefs = ([regex]::Matches($c, 'profile\.childTradeSequence')).Count
-          if ($legacyRuntimeRefs -ne 2) { throw "Legacy per-CON profile references should exist only in migration (expected 2, got $legacyRuntimeRefs)" }
+          if ($c -match 'EnsureChildTradeSequence') { throw 'per-CON runtime trade sequence must not return' }
           if ($c -match 'tradeGlobalFreeze_') { throw 'obsolete whole-trade freeze must not return' }
           if ($c -match 'roundRobinCursor_') { throw 'fixed CON1..CON6 priority required' }
           $rawSend = ([regex]::Matches($c, 'SendInput\(')).Count
           if ($rawSend -ne 2) { throw "Unexpected SendInput call count: $rawSend" }
-          Write-Host 'V0.2.7 SHARED MAIN / ACC CON TRADE STATIC AUDIT PASS'
+          Write-Host 'V0.2.8 RENDEZVOUS / GROUP LOOP / PERSISTENT CHILD DRAIN STATIC AUDIT PASS'
       - name: Stage artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force stage | Out-Null
-          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.7.exe
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.8.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
           Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
           Copy-Item macros stage\macros -Recurse
-          Copy-Item docs\history\VERSION_v0.2.7.md stage\VERSION_v0.2.7.md
+          Copy-Item docs\history\VERSION_v0.2.8.md stage\VERSION_v0.2.8.md
       - uses: actions/upload-artifact@v4
         with:
-          name: ThanLongItemConsolidator-v0.2.7-win-x64
+          name: ThanLongItemConsolidator-v0.2.8-win-x64
           path: stage

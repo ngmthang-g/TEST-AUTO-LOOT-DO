@@ -1,29 +1,27 @@
-# Thần Long Item Consolidator v0.2.7
+# Thần Long Item Consolidator v0.2.8
 
-Windows x64. v0.2.7 đơn giản hóa cấu hình giao dịch: từ nhiều workflow CON riêng thành đúng **2 bộ dữ liệu dùng chung**.
+Windows x64. v0.2.8 làm phiên dồn đồ an toàn hơn và cho phép chuỗi giao dịch lặp theo nhóm nhỏ.
 
-## 1. CHUỖI GD MAIN
-- Là thư viện tọa độ MAIN dùng chung cho mọi giao dịch.
-- Các dòng MAIN #n chỉ cần sửa một lần.
+## TỌA ĐỘ GIAO DỊCH chung
+- Có nút `TỌA GD` để lấy Map/X/Y từ acc đang đứng tại điểm hẹn do người dùng tự chọn.
+- Khi DỒN ĐỒ đang BẬT và một CON đủ điều kiện FULL=0, BĐPT khóa đúng MAIN + CON đó, dừng AutoFight của cả hai và route **cả hai về cùng TỌA ĐỘ GIAO DỊCH** bằng nền route donor v1.5.9.
+- Chỉ khi cả hai đã đứng ổn định tại điểm hẹn, không AutoFight/AutoPath/riding và state an toàn thì chuỗi giao dịch mới bắt đầu.
+- Nếu MAIN/CON chết, đổi map bất thường hoặc mất state trong lúc chuẩn bị/chuỗi/verify thì phiên dồn abort fail-closed, không click mù.
 
-## 2. CHUỖI GD ACC CON
-- Chỉ còn **một workflow global duy nhất** cho CON1 -> CON6.
-- Không còn `CHUỖI GD CON1`, `CON2`, ... riêng.
-- Khi BĐPT chọn MAIN giao dịch với CONn, mọi dòng `ACC CON` trong workflow sẽ chạy trên đúng cửa sổ CONn đang active.
-- Dòng tham chiếu `MAIN #n` vẫn chạy trên MAIN, vì workflow giao dịch có thể cần xen kẽ MAIN -> CON -> MAIN.
-- `CHUYỂN ĐỒ` luôn là thao tác của active CON.
+## Nhóm lặp trong CHUỖI GD ACC CON
+- Chọn 2 hoặc nhiều dòng **liên tiếp**, nhập `Lặp nhóm`, bấm `GOM DÒNG ĐÃ CHỌN`.
+- Một nhóm có thể gồm cả dòng `ACC CON ĐANG GD` và dòng tham chiếu `MAIN #n`.
+- Runtime chạy hết nhóm nhỏ theo đúng thứ tự rồi quay lại đầu nhóm cho tới đủ số vòng, sau đó mới tiếp tục chuỗi lớn.
+- `BỎ NHÓM` tháo toàn bộ group của các dòng đang chọn.
+- Lặp từng dòng (`Lặp`) vẫn hoạt động bên trong nhóm.
+- `CHUYỂN ĐỒ` vẫn chỉ chạy trên CON đang active và mọi click vẫn đi qua BĐPT/REAL INPUT.
 
-## REC / sửa chuỗi
-- Mở `CHUỖI GD ACC CON` từ bất kỳ CON nào. CON đang chọn chỉ là cửa sổ donor để REC/LẤY TỌA/TEST.
-- Tọa CON ghi được dùng cho toàn bộ CON1..CON6 và vẫn scale theo BaseW/BaseH.
-- REC vẫn có thể ghi xen kẽ click trên CON donor và MAIN; click MAIN được ánh xạ về thư viện `CHUỖI GD MAIN`.
+## FULL chỉ là cổng vào phiên; dừng theo số ô riêng từng CON
+- CON chỉ được **bắt đầu** phiên khi `FreeBagSpace == 0`.
+- Mỗi CON có cấu hình riêng `DỪNG GD KHI CON TRỐNG ≥ N ô`.
+- Khi CON đã được chọn, BĐPT giữ nguyên `childPid` đó qua nhiều vòng giao dịch; CON không cần FULL lại ở các vòng sau.
+- Sau mỗi chuỗi, tool chờ snapshot túi ổn định. Nếu CON chưa đạt N ô trống thì tiếp tục vòng mới với chính CON đó.
+- Nếu MAIN chạm ngưỡng bán trong phiên, CON vẫn HOLD; MAIN đi bán bằng workflow hiện có, sau đó quay lại TỌA GD và tiếp tục cùng CON.
+- Khi CON đạt `FreeBagSpace >= N`, phiên mới kết thúc và nhả HOLD để core auto-train tiếp tục.
 
-## Migration từ v0.2.6
-Nếu chưa có section global `ChildTradeSequence`, v0.2.7 tự migrate một lần:
-1. ưu tiên workflow cũ của CON có slot thấp nhất đang tồn tại (CON1 -> CON6),
-2. nếu không có thì dùng template legacy cũ,
-3. lưu thành `ChildTradeSequence` global.
-
-Dữ liệu per-CON cũ vẫn được giữ trong profile để tương thích/rollback nhưng **không còn được runtime dùng**.
-
-DỒN ĐỒ BẬT/TẮT, auto-train độc lập khi OFF, chuỗi bán, FREEZE ALL xuyên suốt chuỗi bán, BĐPT, REC, 6 click riêng, route/map/revive và donor Clean Route v1.5.9 giữ nguyên.
+DỒN ĐỒ OFF, auto-train độc lập, sell sequence FREEZE ALL, shared `CHUỖI GD MAIN` + global `CHUỖI GD ACC CON`, REC, copy, 6-click, revive/map/route và BĐPT từ các bản trước được giữ nguyên.
