@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v0.2.7-R3 — 2026-08-17
+
+### Requested
+- Only change the trade click-sequence editor so `- XÓA` deletes all currently selected rows instead of only one focused row.
+- Keep every other runtime feature/code path unchanged.
+
+### Changed
+- `DeleteTradeSequenceRow()` now uses the editor's existing multi-selection (`SelectedRows`).
+- Selected rows are deleted from highest index to lowest index.
+- When deleting multiple rows from `CHUỖI GD MAIN`, shared ACC CON `MAIN #n` references are repaired across all removed MAIN rows.
+- Single-row delete remains supported by the same code path.
+
+### Protected / Unchanged
+- F4, DỒN ĐỒ, TỌA GD rendezvous, group repeat, AutoFight fallback, five-click model, BĐPT/REAL INPUT, sell/REC/train/route/revive logic.
+- No v0.2.8/v0.2.9 code imported.
+
+### Source
+- R2 base controller: `de141e34f07903c3e490d9684410309f4e0d3a49d7e36438b76a9e941e8cd6e2`.
+- R3 controller: `a69fa0df4932e4020aed6e61b4109bd2c558db5c407afedb46c03456fb575abf`.
+- R3 patch: `3b013821934c882cce8dc755894f66ab835feec394d3433015127a8792fc2136`.
+- Runtime status: **RUNTIME UNTESTED** until live multi-delete is tested.
+
 ## v0.2.7-R2 — 2026-08-17
 
 ### Requested
