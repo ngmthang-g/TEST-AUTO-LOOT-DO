@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $vendor = Join-Path $root 'vendor\donor159'
 $v022Vendor = Join-Path $root 'vendor\v022_patch_parts'
+$v023Vendor = Join-Path $root 'vendor\v023_patch_parts'
 $generated = Join-Path $root 'generated\donor159'
 $temp = Join-Path $root 'generated\_rehydrate'
 
@@ -72,4 +73,22 @@ Normalize-Lf $controller
 $v022ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
 if ($v022ControllerHash -ne '732fcfdd6ab497b1f1da442ec94b63a5f63a2d5757a8fcb8b5c9ee9efc5a1066') { throw "v0.2.2 controller SHA256 mismatch: $v022ControllerHash" }
 
-Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022patch=$v022PatchHash controller=$v022ControllerHash"
+$v023Archive = Join-Path $temp 'controller_v023_patch.tar.xz'
+Join-BinaryParts $v023Vendor 'part.*' $v023Archive
+$v023PatchHash = (Get-FileHash -Algorithm SHA256 $v023Archive).Hash.ToLowerInvariant()
+if ($v023PatchHash -ne '16c3b976d01f6cc7e0987a22b7a4bec5e35edb198b1f61c2fdd70d013715e7ee') { throw "v0.2.3 patch archive SHA256 mismatch: $v023PatchHash" }
+$v023Dir = Join-Path $temp 'v023'
+New-Item -ItemType Directory -Force $v023Dir | Out-Null
+& tar.exe -xJf $v023Archive -C $v023Dir
+if ($LASTEXITCODE -ne 0) { throw 'Failed to extract v0.2.3 patch tar.xz' }
+$v023PatchFile = Join-Path $v023Dir 'controller_v023.patch'
+Push-Location $root
+try {
+    & git apply --whitespace=nowarn --directory=generated/donor159 $v023PatchFile
+    if ($LASTEXITCODE -ne 0) { throw 'git apply failed for v0.2.3 central arbiter patch' }
+} finally { Pop-Location }
+Normalize-Lf $controller
+$v023ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
+if ($v023ControllerHash -ne 'a73a8b7b012d9fbb12335471e5418320be87b80451af84d599e9e4d07d11b667') { throw "v0.2.3 controller SHA256 mismatch: $v023ControllerHash" }
+
+Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022=$v022ControllerHash v023patch=$v023PatchHash controller=$v023ControllerHash"

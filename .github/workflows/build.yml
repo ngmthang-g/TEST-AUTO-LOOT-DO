@@ -1,10 +1,10 @@
-name: build-item-consolidator-v022
+name: build-item-consolidator-v023
 
 on:
   push:
     branches:
       - main
-      - agent/item-consolidator-v0.2.2-real-input-coordinator
+      - agent/item-consolidator-v0.2.3-central-arbiter
   pull_request:
   workflow_dispatch:
 
@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Rehydrate exact Clean Route v1.5.9 + v0.2.1 + v0.2.2 REAL INPUT patch
+      - name: Rehydrate Clean Route v1.5.9 + v0.2.1 + v0.2.2 + v0.2.3 arbiter patch
         shell: pwsh
         run: .\tools\rehydrate_v159.ps1
       - name: Configure x64
@@ -26,39 +26,45 @@ jobs:
         run: .\build\Release\rotation_logic_tests.exe
       - name: Exact trade scheduler self-test
         run: .\build\Release\trade_logic_tests.exe
-      - name: Static v0.2.2 REAL INPUT coordinator audit
+      - name: Static v0.2.3 central-arbiter audit
         shell: pwsh
         run: |
           $c = Get-Content generated\donor159\src\controller.cpp -Raw
           foreach ($required in @(
             'mainSellThreshold_ = 6',
             'childTriggerFreeSlots_ = 0',
-            'tradeGlobalFreeze_ = true',
-            'PrepareMain',
-            'PrepareChild',
-            'tradeSelectPoint',
-            'TradeSequence',
-            'BỘ ĐIỀU PHỐI TRUNG TÂM',
+            'coordinatorInputFreeze_',
+            'CoordinatorClick',
+            'PerformRealInputClickDirect',
+            'BĐPT CẤP QUYỀN CHUỘT',
+            'UNFREEZE ALL',
+            'childTradeSequence',
+            'mainTradeSequence_',
+            'CHUỖI CLICK BÁN ĐỒ',
+            'CHUỖI GD MAIN',
             'SetForegroundWindow',
             'SetCursorPos',
             'SendInput',
             'freeBagSpace <= mainSellThreshold_',
             'freeBagSpace <= 0'
           )) {
-            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.2 token: $required" }
+            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.3 token: $required" }
           }
-          if ($c -match 'roundRobinCursor_') { throw 'Round-robin must not exist; CON1..CON6 fixed priority is required' }
-          Write-Host 'V0.2.2 REAL INPUT COORDINATOR STATIC AUDIT PASS'
+          if ($c -match 'roundRobinCursor_') { throw 'Round-robin must not exist; fixed CON1..CON6 priority required' }
+          if ($c -match 'tradeGlobalFreeze_') { throw 'Whole-transaction global freeze from v0.2.2 must be removed' }
+          $rawSend = ([regex]::Matches($c, 'SendInput\(')).Count
+          if ($rawSend -ne 2) { throw "Unexpected SendInput call count: $rawSend" }
+          Write-Host 'V0.2.3 CENTRAL ARBITER STATIC AUDIT PASS'
       - name: Stage artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force stage | Out-Null
-          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.2.exe
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.3.exe
           Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
           Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
           Copy-Item macros stage\macros -Recurse
-          Copy-Item docs\history\VERSION_v0.2.2.md stage\VERSION_v0.2.2.md
+          Copy-Item docs\history\VERSION_v0.2.3.md stage\VERSION_v0.2.3.md
       - uses: actions/upload-artifact@v4
         with:
-          name: ThanLongItemConsolidator-v0.2.2-win-x64
+          name: ThanLongItemConsolidator-v0.2.3-win-x64
           path: stage
