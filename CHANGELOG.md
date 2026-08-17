@@ -1,34 +1,11 @@
 # CHANGELOG
 
-## [v0.1.0] - 2026-08-16
-
-### Requested
-- Build a very small independent RemoteLoot PoC to determine which loot action the server accepts at distance.
-- Prioritize proof of direct remote pickup before building a complete tool.
-
-### Added / Changed
-- Windows x64 C++ controller and injected `WH_GETMESSAGE` bridge.
-- Runtime IL2CPP semantic resolver for loot APIs.
-- Unity managed-context validation.
-- Nearest ItemPack probe when runtime signature is supported without guessing.
-- One-shot `ClickToObject(RoleID)` test with no PoC movement call.
-- One-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call.
-- `HasBuff(30008009)` Càn Khôn Hồ state probe.
-- `GetFreeBagSpace()` before/after auxiliary pickup proof plus nearest-pack rescan.
-- GitHub Actions Windows x64 build/artifact workflow.
-- Project knowledge and runtime test procedure.
-
-### Build
-- Final code commit tested by CI: `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e`.
-- GitHub Actions run: `#8` / run ID `31941065682`.
-- Final: `BUILD PASS` / `CI PASS` on Windows x64.
-- Artifact workflow packages `RemoteLootProbe.exe`, `RemoteLootBridge.dll`, and README.
-
-### Runtime
-- Status: `RUNTIME UNTESTED`.
-- Direct remote pickup: `UNKNOWN`.
-- Càn Khôn Hồ remote-loot mechanism: `UNKNOWN`.
-
-### Next Version Notes
-- Do not add automation loops yet.
-- First collect repeatable runtime evidence for distant `ClickToObject` and direct pick-all with buff 30008009 absent/present.
+## v0.2.3
+- Promoted BỘ ĐIỀU PHỐI TRUNG TÂM from transaction status/lock to mandatory REAL INPUT arbiter.
+- Added per-click lease: request -> FREEZE ALL -> one target click -> RESULT -> UNFREEZE ALL.
+- Removed v0.2.2 whole-transaction global freeze; workflow participants use HOLD while unrelated accounts may run between click leases.
+- Hid coordinate/sequence tables from the main UI and added role-specific buttons.
+- MAIN now has `CHUỖI CLICK BÁN ĐỒ` and one shared `CHUỖI GD MAIN`.
+- Each CON has its own `CHUỖI GD CONx`; rows can execute on that CON or reference `MAIN #n` shared actions.
+- Preserved per-CON selector coordinate on MAIN.
+- Preserved MAIN <=6 sell priority, FULL-only CON trigger, fixed CON1..CON6 priority, and Clean Route v1.5.9 route/death foundation.

@@ -1,0 +1,30 @@
+child->profile.tradeSelectPoint.valid) {
++                SetTradeStatus(L"CON" + std::to_wstring(slot) + L" FULL nhưng chưa gán TỌA CHỌN CON"); return;
++            }
++            if (!TradeSequenceReady(reason)) {
++                SetTradeStatus(L"CON" + std::to_wstring(slot) + L" FULL nhưng " + reason + L" • mở CHUỖI CLICK GD"); return;
+             }
+             tradeTxn_.mainPid = main->game.pid;
+             tradeTxn_.childPid = child->game.pid;
+@@ -1987,22 +2411,27 @@ private:
+             tradeTxn_.cooldownUntil = 0;
+             tradeTxn_.targetPid = 0;
+             tradeTxn_.macroName.clear();
++            tradeTxn_.sequenceIndex = 0;
++            tradeTxn_.sequenceRepeatDone = 0;
++            tradeTxn_.sequenceDueTick = 0;
+             main->tradeHeld = true;
+             child->tradeHeld = true;
++            tradeGlobalFreeze_ = true; // physical-mouse ownership begins NOW, before MAIN stop/route clicks.
+             BeginTradeReturnToTrain(*main, now, L"MAIN");
+             tradeTxn_.phase = TradePhase::PrepareMain;
+-            LogAccount(*main, L"QUEUE cố định chọn CON " + std::to_wstring(slot) + L" vì FULL (0 ô trống). MAIN hiện còn " + std::to_wstring(main->snapshot.freeBagSpace) + L" ô.");
+-            LogAccount(*child, L"CON " + std::to_wstring(slot) + L" FULL → được chọn theo thứ tự ưu tiên CON1→CON6.");
+-            SetTradeStatus(L"GD: chuẩn bị MAIN ← CON " + std::to_wstring(slot));
++            LogAccount(*main, L"BỘ ĐIỀU PHỐI chọn CON" + std::to_wstring(slot) + L" FULL • khóa toàn bộ action khác để MAIN/CON dùng chuột lần lượt.");
++            LogAccount(*child, L"CON" + std::to_wstring(slot) + L" FULL → được chọn theo ưu tiên CON1→CON6.");
++            SetTradeStatus(L"khóa chuột cho giao dịch MAIN ↔ CON" + std::to_wstring(slot) + L" • bắt đầu MAIN");
+             return;
+         }
+-        SetTradeStatus(L"GD: không có CON nào FULL");
++        SetTradeStatus(L"IDLE • MAIN + cá
