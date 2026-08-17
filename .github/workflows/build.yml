@@ -1,33 +1,42 @@
-name: build-remote-loot-poc
+name: build-item-consolidator-v020
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - agent/item-consolidator-v0.2-gui-donor159
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  windows-x64:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure x64
-        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -A x64
 
       - name: Build Release
         run: cmake --build build --config Release --parallel
 
+      - name: Route logic self-test
+        run: .\build\Release\route_logic_tests.exe
+
+      - name: Rotation logic self-test
+        run: .\build\Release\rotation_logic_tests.exe
+
       - name: Stage artifact
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item build/Release/RemoteLootProbe.exe dist/
-          Copy-Item build/Release/RemoteLootBridge.dll dist/
-          Copy-Item README.md dist/
+          New-Item -ItemType Directory -Force stage | Out-Null
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.0.exe
+          Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
+          Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
+          Copy-Item macros stage\macros -Recurse
+          Copy-Item docs\history\VERSION_v0.2.0.md stage\VERSION_v0.2.0.md
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: RemoteLootPoC-v0.1.0-win-x64
-          path: dist/*
-          if-no-files-found: error
+          name: ThanLongItemConsolidator-v0.2.0-win-x64
+          path: stage
