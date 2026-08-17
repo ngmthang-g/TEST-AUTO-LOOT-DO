@@ -1,0 +1,35 @@
+esult::Done && !AdvanceTradeMacro(*activeMain, *activeChild, now)) {
+-                AbortTrade(L"không khởi động được phase giao dịch kế tiếp", now);
+-            }
++            (void)ExecuteTradeSequenceTick(*activeMain, *activeChild, now);
+             return;
+         }
+ 
++        // Legacy macro phases are not used by v0.2.2. Fail closed if an old state leaks in.
++        if (tradeTxn_.phase != TradePhase::Idle) {
++            AbortTrade(L"phase macro cũ không còn được dùng trong v0.2.2", now); return;
++        }
++
+         if (tradeTxn_.cooldownUntil != 0 && static_cast<LONG>(now - tradeTxn_.cooldownUntil) < 0) return;
+         Account* main = AccountByTradeRole(1);
+-        if (!main) { SetTradeStatus(L"GD: chưa chọn MAIN"); return; }
+-        if (!TradeStateReady(*main)) { SetTradeStatus(L"GD: MAIN chưa ở state rảnh/an toàn"); return; }
++        if (!main) { SetTradeStatus(L"chưa chọn MAIN"); return; }
++        if (!TradeStateReady(*main)) { SetTradeStatus(L"MAIN chưa ở state rảnh/an toàn"); return; }
+         if (main->snapshot.freeBagSpace <= mainSellThreshold_) {
+-            SetTradeStatus(L"GD: MAIN còn ≤" + std::to_wstring(mainSellThreshold_) + L" ô → Auto Sell ưu tiên tuyệt đối");
++            SetTradeStatus(L"MAIN còn ≤" + std::to_wstring(mainSellThreshold_) + L" ô → ưu tiên BÁN ĐỒ");
+             return;
+         }
+ 
+-        // Exact fixed priority, no round-robin: CON1 -> CON2 -> ... -> CON6.
+         for (int slot = 1; slot <= 6; ++slot) {
+             Account* child = AccountByTradeRole(slot + 1);
+             if (!child || !TradeStateReady(*child)) continue;
+-            if (child->snapshot.freeBagSpace > 0) continue; // exact FULL only.
++            if (child->snapshot.freeBagSpace > 0) continue;
+             std::wstring reason;
+-            if (!TradeMacroPairExists(slot, reason)) {
+-                SetTradeStatus(L"GD: CON " + std::to_wstring(slot) + L" FULL nhưng " + reason);
+-                return;
++            if (!

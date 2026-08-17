@@ -1,33 +1,99 @@
-name: build-remote-loot-poc
+name: build-item-consolidator-v027-r1
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - agent/item-consolidator-v0.2.7-r1-requested-only
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  windows-x64:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
+      - name: Rehydrate exact v0.2.7 base plus R1 requested-only patch
+        shell: pwsh
+        run: .\tools\rehydrate_v027r1.ps1
       - name: Configure x64
-        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
-
+        run: cmake -S . -B build -A x64
       - name: Build Release
         run: cmake --build build --config Release --parallel
-
+      - name: Route logic self-test
+        run: .\build\Release\route_logic_tests.exe
+      - name: Rotation logic self-test
+        run: .\build\Release\rotation_logic_tests.exe
+      - name: Exact trade scheduler self-test
+        run: .\build\Release\trade_logic_tests.exe
+      - name: Static v0.2.7-R1 requested-only audit
+        shell: pwsh
+        run: |
+          $c = Get-Content generated\donor159\src\controller.cpp -Raw
+          foreach ($required in @(
+            'v0.2.7-R1',
+            'childTradeSequence_{}',
+            'ChildTradeSequence',
+            'TradeDrainFreeSlots',
+            'tradeDrainFreeSlots',
+            'TradeRendezvousMap',
+            'TỌA ĐỘ GIAO DỊCH',
+            'tradeRendezvousPhase',
+            'BeginTradeRendezvous',
+            'HandleTradeRendezvous',
+            'GOM DÒNG ĐÃ CHỌN',
+            'GroupId',
+            'GroupRepeat',
+            'TradePhase::Verify',
+            'if (child->snapshot.freeBagSpace > 0) continue;',
+            'FinishTrade(now, L"MAIN còn ≤"',
+            'AUTO BÁN FULL: BẬT',
+            'AUTO BÁN FULL: TẮT',
+            'BS_PUSHBUTTON',
+            'CON1→CON6',
+            'DỒN ĐỒ: BẬT',
+            'DỒN ĐỒ: TẮT',
+            'AcquireCoordinatorSequenceFreeze',
+            'ReleaseCoordinatorSequenceFreeze',
+            'CoordinatorClick',
+            'SetForegroundWindow',
+            'SetCursorPos',
+            'SendInput',
+            'mainSellThreshold_ = 6',
+            'childTriggerFreeSlots_ = 0'
+          )) {
+            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.7-R1 token: $required" }
+          }
+          foreach ($forbidden in @(
+            'v0.2.8',
+            'v0.2.9',
+            'BeginTradeReturnToTrain',
+            'HandleTrainRecovery(*activeMain',
+            'HandleTrainRecovery(*activeChild',
+            'tradeGlobalFreeze_',
+            'roundRobinCursor_',
+            'CON không còn FULL'
+          )) {
+            if ($c -match [regex]::Escape($forbidden)) { throw "Forbidden R1 token present: $forbidden" }
+          }
+          if ($c -match 'EnsureChildTradeSequence') { throw 'per-CON runtime sequence helper must remain removed' }
+          if ($c -match 'std::vector<TradeSequenceStep>& seq = child\.profile\.childTradeSequence') { throw 'runtime must not execute per-CON profile workflow' }
+          $legacyRuntimeRefs = ([regex]::Matches($c, 'profile\.childTradeSequence')).Count
+          if ($legacyRuntimeRefs -ne 2) { throw "Legacy per-CON profile refs changed unexpectedly: $legacyRuntimeRefs" }
+          $entryGateCount = ([regex]::Matches($c, [regex]::Escape('if (child->snapshot.freeBagSpace > 0) continue;'))).Count
+          if ($entryGateCount -ne 1) { throw "FULL child entry gate changed unexpectedly: $entryGateCount" }
+          $rawSend = ([regex]::Matches($c, 'SendInput\(')).Count
+          if ($rawSend -ne 2) { throw "Unexpected SendInput call count: $rawSend" }
+          Write-Host 'V0.2.7-R1 REQUESTED-ONLY STATIC AUDIT PASS'
       - name: Stage artifact
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item build/Release/RemoteLootProbe.exe dist/
-          Copy-Item build/Release/RemoteLootBridge.dll dist/
-          Copy-Item README.md dist/
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          New-Item -ItemType Directory -Force stage | Out-Null
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.7-R1.exe
+          Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
+          Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
+          Copy-Item macros stage\macros -Recurse
+          Copy-Item docs\history\VERSION_v0.2.7-R1.md stage\VERSION_v0.2.7-R1.md
+      - uses: actions/upload-artifact@v4
         with:
-          name: RemoteLootPoC-v0.1.0-win-x64
-          path: dist/*
-          if-no-files-found: error
+          name: ThanLongItemConsolidator-v0.2.7-R1-win-x64
+          path: stage

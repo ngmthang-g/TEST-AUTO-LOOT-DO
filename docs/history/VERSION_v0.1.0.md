@@ -1,81 +1,44 @@
-# VERSION v0.1.0
+# VERSION v0.1.0 — Item Consolidator Foundation
 
-## A. Identity / Lineage
-- Version: v0.1.0
-- Date: 2026-08-16
-- Based On: empty standalone test repository
-- Reason Created: prove distant loot/server acceptance before building a complete RemoteLoot tool
-- Last Known-Good: none
-- Regression From: none
-- Supersedes: none
+## Goal captured
+Build a coordinator for one MAIN and 1..6 CHILD accounts. All accounts train. CHILD transfers items when free slots approach the configured threshold. MAIN receives and sells when its free slots fall below the MAIN threshold. Only one trade can run at once. Actions are pure background clicks, do not occupy the physical mouse and scale with game-window size.
 
-## B. User Request
-Build a **very small RemoteLoot PoC**. If direct pickup at distance passes, only then expand the tool.
+## Implemented
+- repo reset from unrelated RemoteLoot PoC;
+- one Windows x64 EXE, no bridge DLL/injection;
+- visible game-window discovery;
+- MAIN + ordered 1..6 CHILD assignment;
+- `post` / `send` background click engine;
+- normalized coordinate scaling per click;
+- external `sleep/click/grid` macro DSL;
+- safe `UNCONFIGURED` macro placeholders that fail closed;
+- bag geometry wizard;
+- visual empty-slot calibration + bag scan;
+- uncertainty guard;
+- separate MAIN/CHILD thresholds;
+- dynamic per-trade grid-click cap from MAIN free capacity;
+- round-robin CHILD scheduler;
+- global trade/sell transaction mutex;
+- MAIN-only sell path;
+- rescan after trade;
+- optional visual death detector + revive/return macro path;
+- Windows x64 GitHub Actions packaging.
 
-## C. State Before Modification
-The test repository contained no implementation. Canonical knowledge already verified the normal shipped loot flow and semantic pickup APIs, but did not prove distant server acceptance.
+## CI result
+- initial compile exposed legacy Win32 `near` macro collision;
+- second compile exposed legacy Win32 `min/max` collisions;
+- compatibility header now undefines `near/min/max` after the forced Windows include;
+- final commit `2a2b7ea4f2c2ef1e2511bb820a2754e47be19fab`;
+- Actions run `31961357854` (#17): configure PASS, build PASS, stage PASS, artifact upload PASS;
+- artifact `ThanLongItemConsolidator-v0.1.0-win-x64` ID `9267326722`.
 
-## D. Investigation / Root Cause
-Open question, not a bug root cause:
-- VERIFIED: normal shipped flow moves when distance >100 before `ClickToObject`.
-- VERIFIED: shipped pick-all calls `PickUpItemFromItemPack(itemPackID,-1,1)`.
-- VERIFIED: shipped auto pickup skips with buff 30008009 / Càn Khôn Hồ.
-- UNKNOWN: whether server accepts direct pickup at distance without/with that buff.
+## Runtime still unverified
+- Unity acceptance of `PostMessage`/`SendMessageTimeout`;
+- exact live UI macro coordinates;
+- bag capture/geometry/threshold accuracy;
+- trade popup/confirm timing;
+- MAIN sell sequence;
+- death signature and recovery clicks.
 
-## E. Changes Made
-Added a standalone x64 native PoC with:
-- process/window discovery;
-- target-thread hook bridge;
-- Unity managed-context guard;
-- runtime semantic API resolution;
-- nearest-pack read probe;
-- one-shot no-movement `ClickToObject`;
-- one-shot no-movement direct pick-all;
-- buff 30008009 read probe;
-- `GetFreeBagSpace()` before/after auxiliary proof and post-action nearest-pack rescan;
-- CI build artifact.
-
-## F. Important Implementation Details
-The PoC deliberately does not call `MoveTo` or `MoveToEx` in remote interaction tests. Mutations are manual one-shot operations. Unsupported runtime signatures are reported rather than guessed.
-
-The v0.1.0 bridge directly invokes the semantic method while running inside the validated Unity synchronization-context message hook. This is a **PoC shortcut**, not the intended production action engine. A crash/disconnect therefore cannot by itself distinguish server rejection from execution-boundary failure.
-
-## G. Files / Components Changed
-Added/updated:
-- `CMakeLists.txt`
-- `src/Protocol.h`
-- `src/Bridge.cpp`
-- `src/Probe.cpp`
-- `.github/workflows/build.yml`
-- `README.md`
-- `PROJECT_KNOWLEDGE.md`
-- `CHANGELOG.md`
-- project docs
-
-## H. Build / CI History
-- Final code commit: `0bc6751e8e2521904ed296ed3fcd94a5c1b68a2e`.
-- GitHub Actions run #8, run ID `31941065682`.
-- Final Build: `BUILD PASS`.
-- CI: `CI PASS` on Windows x64.
-- Artifact contents: `RemoteLootProbe.exe`, `RemoteLootBridge.dll`, README.
-
-## I. Runtime Result
-- RUNTIME: UNTESTED
-- Confirmed Working: none yet on the live game/server
-- Awaiting Test: all target-game behavior
-
-## J. Failed Attempts
-None recorded yet.
-
-## K. Known-Good Established
-None. CI success is not runtime known-good.
-
-## L. Remaining Questions
-1. Exact runtime signature/instance availability of loot methods on the target build.
-2. Whether nearest pack RoleID is accepted directly as `itemPackID`.
-3. Remote ClickToObject acceptance at >100 distance.
-4. Remote pick-all acceptance at >100 distance.
-5. Behavior difference with buff 30008009 absent vs present.
-
-## M. Handoff
-Run the artifact on a live game PID, preserve the full console log, and report movement/pack/bag/disconnect observations. Do not redesign or add loops before that evidence exists.
+## Next evidence
+Start with one MAIN + one CHILD and prove background clicking + normalized scaling before filling the longer trade/sell/revive macros.

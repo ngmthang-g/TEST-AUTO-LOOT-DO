@@ -1,75 +1,66 @@
-# PROJECT KNOWLEDGE
+# PROJECT KNOWLEDGE — v0.2.7-R1
 
-## Project Identity
-- Name: RemoteLoot PoC
-- Repository: `ngmthang-g/TEST-AUTO-LOOT-DO`
-- Primary branch: `main`
-- Current version: `v0.1.0`
-- Platform: Windows x64, native C++20/CMake
-- Runtime state: `RUNTIME UNTESTED`
+## Baseline provenance — bắt buộc
+R1 được xây **trực tiếp và duy nhất** từ v0.2.7:
+- parent/head: `1308b28bd38fb044b9fceed3671820e45fb2cd23`
+- exact v0.2.7 controller SHA256: `397f1cf088ce0163cdba7aea06350cc25aff8aab4627e7def9331c9f1070845f`
+- R1 patch được áp sau khi rehydrate và xác minh đúng SHA trên.
 
-## Project Goal
-Prove one narrow question before building a larger tool: **can the frozen Thần Long client/server accept semantic loot interaction/pickup while the local character remains farther away than the built-in normal pickup flow?**
+**Không dùng bất kỳ source/logic nào từ v0.2.8 hoặc v0.2.9.** Các version đó không phải ancestor/input của R1. Khi sửa R1 về sau, không được “port lại” logic từ hai version đó nếu người dùng không yêu cầu rõ.
 
-## Current State
-### Source implemented
-- process discovery via loaded `GameAssembly.dll`;
-- per-PID shared-memory controller/bridge protocol;
-- `WH_GETMESSAGE` bridge injected on the target window thread;
-- IL2CPP export/class/method discovery by semantic names;
-- read-only Unity `SynchronizationContext` validation;
-- read-only loot API signature dump;
-- read-only nearest-pack probe when `GetNearestItemPack` is zero-arg at runtime;
-- one-shot `ClickToObject(RoleID)` test with no PoC movement call;
-- one-shot `PickUpItemFromItemPack(itemPackID,-1,1)` test with no PoC movement call;
-- read-only `HasBuff(30008009)` test.
+## Những thay đổi được phép trong R1
 
-### Runtime-confirmed working
-None yet.
+### Group repeat trong shared ACC CON workflow
+`TradeSequenceStep` thêm:
+- `groupId`
+- `groupRepeat`
 
-### Built but runtime-untested
-All v0.1.0 behavior until CI/runtime evidence says otherwise.
+Chỉ `childTradeSequence_` global có UI gom nhóm. Chọn 2+ dòng liên tiếp, gán một group ID và số lần lặp. Runtime chạy hết block liên tiếp của group rồi lặp lại block đó cho đủ `groupRepeat`, sau đó mới tiến ra ngoài group. Row `repeat` cũ vẫn tồn tại bên trong group. Copy/paste giữ metadata group và remap group ID khi paste để tránh va chạm.
 
-## Hard Rules
-1. This repository is an **independent RemoteLoot proof tool**, not a branch of Auto Train/Auto Sell.
-2. Do not add automatic movement to remote pickup tests.
-3. Do not add auto-loop/spam until one-shot server acceptance is established.
-4. Do not claim direct remote pickup PASS from a successful method invocation alone.
-5. PASS requires concrete runtime state: character stays put, target pack changes/disappears, bag/item state changes correctly, and no disconnect/crash.
-6. A crash/disconnect can be an execution-boundary failure and must not be silently interpreted as server rejection.
-7. Càn Khôn Hồ mechanism remains UNKNOWN. Only the built-in `HasBuff(30008009)` skip guard is VERIFIED from shipped source.
-8. Do not broad reverse-engineer the client. Use the canonical knowledge repo first and only investigate exact missing facts.
+### Per-CON drain target
+`AccountProfile::tradeDrainFreeSlots`, INI key `TradeDrainFreeSlots`, mặc định 6, clamp 1..90.
 
-## Verified Client Facts Used
-From canonical knowledge:
-- `Game.GetNearestItemPack(...)` / `Game.GetNearbyItemPack(...)` exist for item-pack discovery.
-- item packs expose at least `Type`, `RoleID`, `Position` in shipped Lua.
-- normal shipped auto pickup uses `MoveToEx` when distance >100, then `ClickToObject(RoleID)`.
-- shipped pick-all is `Game.PickUpItemFromItemPack(itemPackID,-1,1)`.
-- built-in auto pickup skips while `Game.HasBuff(30008009)` and mentions Càn Khôn Hồ.
+Quy tắc session:
+1. **ENTRY GATE duy nhất:** CON chỉ được chọn khi `freeBagSpace == 0`.
+2. Khi đã chọn, `tradeTxn_.childPid` giữ nguyên qua các vòng.
+3. Sau mỗi chuỗi, phase `Verify` chờ số ô MAIN/CON ổn định.
+4. Kết thúc nếu MAIN `freeBagSpace <= mainSellThreshold_` hoặc active CON `freeBagSpace >= tradeDrainFreeSlots`.
+5. Nếu chưa đạt, chạy thêm một vòng với đúng CON hiện tại. Không re-check FULL cho child.
+6. `FinishTrade` nhả HOLD; từ đó core v0.2.7 tự tiếp tục auto map/train/bán theo logic sẵn có. R1 không tạo mid-session sell flow riêng.
 
-## Important Unknowns
-- Is `ItemPack.RoleID` identical to the `itemPackID` expected by direct pickup in all runtime cases?
-- Does server accept direct pickup when farther than normal pickup range and buff 30008009 is absent?
-- Does server acceptance change when buff 30008009 is present?
-- Does Càn Khôn Hồ use this same request path or a separate server-driven subsystem?
-- Is direct invocation from the validated message-hook context stable enough for this one-shot proof on the target build?
+### Global trade rendezvous
+Global profile `tradeRendezvous_` dùng INI:
+- `TradeRendezvousMap`
+- `TradeRendezvousX`
+- `TradeRendezvousY`
+- `TradeRendezvousValid`
 
-## Current Test Order
-1. Validate Unity managed context.
-2. Resolve exact runtime loot method signatures.
-3. Scan nearest pack if signature is supported.
-4. Record buff 30008009 absent/present.
-5. At >100 distance, test `ClickToObject(RoleID)` with no movement call.
-6. At >100 distance, test `PickUpItemFromItemPack(candidate,-1,1)` with no movement call.
-7. Record pack/bag/movement/disconnect result.
-8. Repeat under the opposite Càn Khôn Hồ buff state.
+`CaptureTradeRendezvous()` GET Map/X/Y từ snapshot acc đang chọn.
 
-## Evidence Index
-- `EVID-001`: canonical shipped Lua/API knowledge establishes normal loot flow and direct semantic pickup call.
-- Runtime evidence for v0.1.0: pending user test.
+Trade-only runtime state:
+- `tradeRendezvousPhase`
+- `tradeRendezvousTick`
+- `tradeRendezvousStopAttempts`
 
-## Decisions
-- `DEC-001`: keep v0.1.0 one-shot and movement-free.
-- `DEC-002`: refuse to guess unsupported runtime signatures; print them and stop that probe.
-- `DEC-003`: if remote pickup passes, production implementation must use a proper action gate/MainThread dispatcher/state proof rather than preserving PoC shortcuts.
+Luồng chuẩn bị phiên:
+- giữ `tradeHeld=true` cho MAIN + active CON,
+- StopPath AutoPath map/train đang có,
+- dùng đúng hai click StopAuto1/StopAuto2 v0.2.7 để tắt AutoFight,
+- dùng donor `HandleRobustTravel` đến `TỌA ĐỘ GIAO DỊCH`,
+- chỉ khi cả hai đứng ổn định mới chạy chọn CON và shared trade workflow.
+
+**Không dùng `trainRecoveryPhase` để đi TỌA GD.** Generic `TickAccount` vẫn bị chặn bởi `tradeHeld`; chỉ `FinishTrade/AbortTrade` mới nhả phiên.
+
+### Auto bán FULL pushbutton
+Checkbox cũ chỉ được đổi UI sang nút `AUTO BÁN FULL: BẬT/TẮT`. Nút gọi `ToggleSelectedSell()`, đảo `profile.enableSell` rồi `SaveProfile`. Không thay đổi điều kiện/scheduler bán đồ nền v0.2.7.
+
+## Các invariant v0.2.7 phải giữ
+- Active runtime trade definitions vẫn chỉ là `mainTradeSequence_` + một `childTradeSequence_` global.
+- Fixed CON1 -> CON6 priority; không round-robin.
+- `CHUYỂN ĐỒ` vẫn active-CON-only.
+- BĐPT/`CoordinatorClick` vẫn là đường duy nhất cho physical auto click.
+- Exactly 2 `SendInput(` call sites raw LEFTDOWN/LEFTUP.
+- Không `tradeGlobalFreeze_`, không `roundRobinCursor_`.
+- Sell sequence persistent FREEZE ALL giữ nguyên.
+- DỒN ĐỒ OFF independent auto-train/sell giữ nguyên.
+- REC/copy/6-click/revive/route/map/periodic confirm giữ nguyên trừ đúng các điểm nêu ở trên.
