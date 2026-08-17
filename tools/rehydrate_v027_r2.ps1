@@ -54,8 +54,43 @@ try {
 $normalized = [IO.File]::ReadAllText($controller).Replace("`r`n", "`n")
 [IO.File]::WriteAllText($controller, $normalized, [Text.UTF8Encoding]::new($false))
 
+$requestedHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
+if ($requestedHash -ne '2124f79119754abfa95f320481b878239ae38c12810c7c85dbe963c44c41f09b') {
+    throw "v0.2.7-R2 requested patch SHA mismatch before helper restore: $requestedHash"
+}
+
+# First Windows build proved two untouched clean-v0.2.7 helpers were accidentally removed
+# while deleting StopAuto1. Restore those helpers byte-for-byte from the clean source.
+$repairPartsDir = Join-Path $root 'vendor\v027_r2_restore_helpers_parts'
+$repairArchive = Join-Path $temp 'controller_r2_restore_helpers.tar.xz'
+$repairParts = Get-ChildItem -LiteralPath $repairPartsDir -Filter 'part.*' | Sort-Object Name
+if ($repairParts.Count -eq 0) { throw 'No R2 helper-restore patch parts found' }
+$repairOut = [IO.File]::Create($repairArchive)
+try {
+    foreach ($p in $repairParts) {
+        $input = [IO.File]::OpenRead($p.FullName)
+        try { $input.CopyTo($repairOut) } finally { $input.Dispose() }
+    }
+} finally { $repairOut.Dispose() }
+$repairArchiveHash = (Get-FileHash -Algorithm SHA256 $repairArchive).Hash.ToLowerInvariant()
+if ($repairArchiveHash -ne '70b9aaf61ca6b9383ed6ba4d4dd3a82afe9d5664368e415b119b9e6f07aaf782') { throw "R2 helper-restore archive SHA mismatch: $repairArchiveHash" }
+$repairDir = Join-Path $temp 'restore_helpers'
+New-Item -ItemType Directory -Force $repairDir | Out-Null
+& tar.exe -xJf $repairArchive -C $repairDir
+if ($LASTEXITCODE -ne 0) { throw 'Failed to extract R2 helper-restore archive' }
+$repairPatch = Join-Path $repairDir 'controller_r2_restore_helpers.patch'
+$repairPatchHash = (Get-FileHash -Algorithm SHA256 $repairPatch).Hash.ToLowerInvariant()
+if ($repairPatchHash -ne '4a8c9df615e7dc7384b0e64cb02ec3e20db8fbe2f43228dbf56cd6bd3998a6c4') { throw "R2 helper-restore patch SHA mismatch: $repairPatchHash" }
+Push-Location $root
+try {
+    & git apply --whitespace=nowarn $repairPatch
+    if ($LASTEXITCODE -ne 0) { throw 'git apply failed for R2 helper-restore patch' }
+} finally { Pop-Location }
+$normalized = [IO.File]::ReadAllText($controller).Replace("`r`n", "`n")
+[IO.File]::WriteAllText($controller, $normalized, [Text.UTF8Encoding]::new($false))
+
 $finalHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
-if ($finalHash -ne '2124f79119754abfa95f320481b878239ae38c12810c7c85dbe963c44c41f09b') {
+if ($finalHash -ne 'de141e34f07903c3e490d9684410309f4e0d3a49d7e36438b76a9e941e8cd6e2') {
     throw "v0.2.7-R2 final controller SHA mismatch: $finalHash"
 }
 
