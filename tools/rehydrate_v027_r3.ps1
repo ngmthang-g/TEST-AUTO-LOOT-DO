@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $controller = Join-Path $root 'generated\donor159\src\controller.cpp'
 $patch = Join-Path $root 'patches\v027_r3_multidelete.patch'
+$canonicalPatch = Join-Path $root 'generated\_v027_r3_multidelete.patch'
 
 & (Join-Path $PSScriptRoot 'rehydrate_v027_r2.ps1')
 
@@ -10,7 +11,11 @@ if ($r2Hash -ne 'de141e34f07903c3e490d9684410309f4e0d3a49d7e36438b76a9e941e8cd6e
     throw "v0.2.7-R2 base SHA mismatch before R3: $r2Hash"
 }
 
-$patchHash = (Get-FileHash -Algorithm SHA256 $patch).Hash.ToLowerInvariant()
+# GitHub checkout on Windows may materialize text patches as CRLF. Canonicalize the transport only;
+# runtime source logic/patch content is unchanged.
+$patchText = [IO.File]::ReadAllText($patch).Replace("`r`n", "`n")
+[IO.File]::WriteAllText($canonicalPatch, $patchText, [Text.UTF8Encoding]::new($false))
+$patchHash = (Get-FileHash -Algorithm SHA256 $canonicalPatch).Hash.ToLowerInvariant()
 if ($patchHash -ne '3b013821934c882cce8dc755894f66ab835feec394d3433015127a8792fc2136') {
     throw "v0.2.7-R3 multi-delete patch SHA mismatch: $patchHash"
 }
@@ -22,7 +27,7 @@ if ([string]::IsNullOrWhiteSpace($beforeF4)) { throw 'Cannot locate protected F4
 
 Push-Location $root
 try {
-    & git apply --whitespace=nowarn $patch
+    & git apply --whitespace=nowarn $canonicalPatch
     if ($LASTEXITCODE -ne 0) { throw 'git apply failed for v0.2.7-R3 multi-delete patch' }
 } finally { Pop-Location }
 
