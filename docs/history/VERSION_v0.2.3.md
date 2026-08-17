@@ -17,4 +17,4 @@ The main GUI must stay compact. Sell/trade coordinate sequences are hidden behin
 MAIN free slots <=6 => sell priority. CON must be FULL. Multiple FULL CONs use fixed CON1..CON6 priority. MAIN prepares first, then selected CON, using donor 1.5.9 route/recovery.
 
 ## Source integrity
-v0.2.3 is a checksum-verified patch on top of the exact v0.2.2 controller. Final expected controller SHA256: `a73a8b7b012d9fbb12335471e5418320be87b80451af84d599e9e4d07d11b667`.
+v0.2.3 is a checksum-verified patch on top of the exact v0.2.2 controller. Final expected controller SHA256: `4f7069a0ae47b417a2a4ccf8da4bfd3d4019ae216d88e01070e51c7e0e085fe4`.

@@ -87,8 +87,13 @@ try {
     & git apply --whitespace=nowarn --directory=generated/donor159 $v023PatchFile
     if ($LASTEXITCODE -ne 0) { throw 'git apply failed for v0.2.3 central arbiter patch' }
 } finally { Pop-Location }
+Push-Location $root
+try {
+    & git apply --whitespace=nowarn .\tools\controller_v023_compile_fix.patch
+    if ($LASTEXITCODE -ne 0) { throw 'git apply failed for v0.2.3 MSVC const fix' }
+} finally { Pop-Location }
 Normalize-Lf $controller
 $v023ControllerHash = (Get-FileHash -Algorithm SHA256 $controller).Hash.ToLowerInvariant()
-if ($v023ControllerHash -ne 'a73a8b7b012d9fbb12335471e5418320be87b80451af84d599e9e4d07d11b667') { throw "v0.2.3 controller SHA256 mismatch: $v023ControllerHash" }
+if ($v023ControllerHash -ne '4f7069a0ae47b417a2a4ccf8da4bfd3d4019ae216d88e01070e51c7e0e085fe4') { throw "v0.2.3 controller SHA256 mismatch: $v023ControllerHash" }
 
 Write-Host "REHYDRATE PASS donor=$donorHash v021=$v021ControllerHash v022=$v022ControllerHash v023patch=$v023PatchHash controller=$v023ControllerHash"
