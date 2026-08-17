@@ -67,11 +67,12 @@ Reverse-ArchivePatch 'v025' (Join-Path $root 'vendor\v025_patch_parts') '6d8b5cb
 Assert-Controller 'v0.2.4' 'f45b8969488ac5a59e773845a60f180499700f9ebd59fff905d9a4abe5d57959'
 Reverse-ArchivePatch 'v024' (Join-Path $root 'vendor\v024_patch_parts') '8152b1e579e89da2362eb4dd72170f951e151f5da67035d3c8c9af9524a12cb3' 'controller_v024.patch'
 Assert-Controller 'v0.2.3' '4f7069a0ae47b417a2a4ccf8da4bfd3d4019ae216d88e01070e51c7e0e085fe4'
-Push-Location $root
-try {
-    & git apply -R --whitespace=nowarn .\tools\controller_v023_compile_fix.patch
-    if ($LASTEXITCODE -ne 0) { throw 'git apply -R failed for v0.2.3 compile fix' }
-} finally { Pop-Location }
+$text023 = [IO.File]::ReadAllText($controller)
+$from023 = 'std::wstring TradeStepTargetLabel(const TradeSequenceStep& step) {'
+$to023 = 'std::wstring TradeStepTargetLabel(const TradeSequenceStep& step) const {'
+if (-not $text023.Contains($from023)) { throw 'v0.2.3 compile-fix signature not found for reverse' }
+$text023 = $text023.Replace($from023, $to023)
+[IO.File]::WriteAllText($controller, $text023, [Text.UTF8Encoding]::new($false))
 Normalize-Lf $controller
 Reverse-ArchivePatch 'v023' (Join-Path $root 'vendor\v023_patch_parts') '16c3b976d01f6cc7e0987a22b7a4bec5e35edb198b1f61c2fdd70d013715e7ee' 'controller_v023.patch'
 Assert-Controller 'v0.2.2' '732fcfdd6ab497b1f1da442ec94b63a5f63a2d5757a8fcb8b5c9ee9efc5a1066'
