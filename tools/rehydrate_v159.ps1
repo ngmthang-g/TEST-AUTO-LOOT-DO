@@ -120,7 +120,7 @@ if ($v024ControllerHash -ne 'f45b8969488ac5a59e773845a60f180499700f9ebd59fff905d
 $v025Archive = Join-Path $temp 'controller_v025_patch.tar.xz'
 Join-BinaryParts $v025Vendor 'part.*' $v025Archive
 $v025PatchHash = (Get-FileHash -Algorithm SHA256 $v025Archive).Hash.ToLowerInvariant()
-if ($v025PatchHash -ne 'a527a14346f7012c6719e802b099c07efa2a94225bee3c53f3c1f4e2906279eb') { throw "v0.2.5 patch archive SHA256 mismatch: $v025PatchHash" }
+if ($v025PatchHash -ne '6d8b5cbed8ec129312a4a6c895af7ccc6c7fd7ce7d3e3ab979ca49a78057a5b5') { throw "v0.2.5 patch archive SHA256 mismatch: $v025PatchHash" }
 $v025Dir = Join-Path $temp 'v025'
 New-Item -ItemType Directory -Force $v025Dir | Out-Null
 & tar.exe -xJf $v025Archive -C $v025Dir
