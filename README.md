@@ -1,25 +1,23 @@
-# Thần Long Item Consolidator v0.2.5
+# Thần Long Item Consolidator v0.2.6
 
-Bản sửa tập trung vào 3 lỗi thực tế của v0.2.4: **FREEZE toàn chuỗi bán**, **editor chọn đúng dòng sau khi sao chép nhiều dòng**, và **REC tự dọn lease/transaction treo**.
+Windows x64. v0.2.6 bổ sung **DỒN ĐỒ BẬT/TẮT** và khả năng lấy nguyên **CHUỖI CLICK BÁN ĐỒ** từ acc khác.
 
-## 1. MAIN chạy CHUỖI CLICK BÁN ĐỒ = FREEZE ALL suốt chuỗi
-BĐPT chỉ lấy `SEQUENCE LEASE` khi MAIN thật sự bước vào phase `CHUỖI CLICK BÁN ĐỒ`. Từ lúc đó đến khi dòng cuối cùng hoàn tất, tất cả acc khác bị FREEZE liên tục, kể cả thời gian delay giữa các dòng. MAIN giữ quyền chạy các bước của chính chuỗi bán.
+## DỒN ĐỒ: BẬT
+- Giữ logic MAIN/CON hiện tại.
+- MAIN bán khi FreeBagSpace <= ngưỡng MAIN (mặc định 6).
+- CON chỉ được chọn giao dịch khi FULL đúng 0 ô.
+- Nhiều CON FULL giữ ưu tiên CON1 -> CON6.
+- Giao dịch vẫn qua BĐPT và chuỗi GD riêng/shared MAIN như các bản trước.
 
-Không còn chu kỳ `FREEZE -> click -> UNFREEZE -> delay -> FREEZE` cho từng dòng bán. BĐPT chỉ UNFREEZE khi chuỗi bán hoàn tất, click lỗi/abort, người dùng dừng acc, hoặc REC chủ động lấy quyền cấu hình.
+## DỒN ĐỒ: TẮT
+- Scheduler giao dịch MAIN↔CON dừng hoàn toàn; nếu đang có transaction thì abort và nhả HOLD.
+- Mỗi acc đang RUN trở thành auto train độc lập.
+- Bất kỳ acc nào FULL = 0 ô sẽ tự dừng đánh, chạy NPC bán, thực hiện chuỗi bán riêng, quay về bãi và tiếp tục train.
+- Trong mode độc lập, ngưỡng MAIN <=6 không dùng; tất cả acc bán theo FULL = 0.
+- Khi bắt đầu CHUỖI CLICK BÁN ĐỒ, BĐPT vẫn giữ SEQUENCE LEASE và FREEZE ALL xuyên suốt cả chuỗi như v0.2.5.
 
-## 2. Sửa editor sau khi SAO CHÉP nhiều dòng
-Multi-select vẫn dùng để SAO CHÉP. Nhưng dòng đang chỉnh giờ được xác định bằng **focused row** (dòng người dùng vừa click), không lấy selected row đầu tiên. Vì vậy chọn một dòng bất kỳ sau khi copy nhiều dòng sẽ nạp đúng ACC/Loại/Mô tả/Delay/Lặp của dòng đó.
+## LẤY CHUỖI BÁN CỦA ACC KHÁC
+`CHUỖI CLICK BÁN ĐỒ` mở được cho mọi acc. Trong editor có `LẤY CHUỖI CỦA ACC...`.
+Chọn một acc nguồn đã có chuỗi bán; tool copy nguyên các bước sang acc đang chỉnh. Nếu acc đích đã có chuỗi, tool hỏi xác nhận trước khi thay. ClickPoint giữ base size để scale theo cửa sổ acc đích.
 
-Đặc biệt ở workflow CON: nếu dòng đang là `MAIN #n`, đổi ACC về CON sẽ nạp lại editor đúng dòng và mở lại Mô tả + `CLICK / CHUYỂN ĐỒ` để chỉnh.
-
-## 3. REC không còn mắc transaction/lease treo
-Khi người dùng DỪNG AUTO một acc đang thuộc workflow giao dịch, BĐPT AbortTrade và nhả HOLD ngay. Khi bấm REC, nếu vẫn còn transaction hoặc click lease cũ ở tầng điều phối thì REC thu hồi/dọn trạng thái treo trước khi vào RECORDING.
-
-REC vẫn khóa automation trong lúc ghi và sau `DỪNG REC` vẫn chuyển click tay thành các dòng tọa độ editable như v0.2.4.
-
-## Rule giữ nguyên
-- MAIN `FreeBagSpace <= 6`: bán đồ ưu tiên.
-- CON chỉ giao dịch khi FULL.
-- CON1 -> CON6 cố định.
-- REAL INPUT vẫn đi qua BĐPT.
-- Clean Route v1.5.9 route/death/revive foundation giữ nguyên.
+REC, copy/paste nhiều dòng, lấy 6 click, route/map/revive, FREEZE/BĐPT và Clean Route v1.5.9 giữ nguyên.

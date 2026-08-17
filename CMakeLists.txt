@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ThanLongItemConsolidator VERSION 0.2.5 LANGUAGES CXX RC)
+project(ThanLongItemConsolidator VERSION 0.2.6 LANGUAGES CXX RC)
 
 if(NOT WIN32)
     message(FATAL_ERROR "ThanLongItemConsolidator is Windows-only")
@@ -7,38 +7,28 @@ endif()
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(FATAL_ERROR "ThanLongItemConsolidator must be built x64")
 endif()
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
 set(DONOR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/generated/donor159")
 if(NOT EXISTS "${DONOR_DIR}/src/controller.cpp")
     message(FATAL_ERROR "Donor source not rehydrated. Run tools/rehydrate_v159.ps1 before CMake configure.")
 endif()
-
 add_library(ThanLongCleanRouteBridge SHARED "${DONOR_DIR}/src/bridge.cpp")
 target_include_directories(ThanLongCleanRouteBridge PRIVATE "${DONOR_DIR}/src")
 target_compile_definitions(ThanLongCleanRouteBridge PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(ThanLongCleanRouteBridge PRIVATE user32 kernel32)
-
-add_executable(ThanLongItemConsolidator WIN32
-    "${DONOR_DIR}/src/controller.cpp"
-    "${DONOR_DIR}/resources/app.rc"
-)
+add_executable(ThanLongItemConsolidator WIN32 "${DONOR_DIR}/src/controller.cpp" "${DONOR_DIR}/resources/app.rc")
 target_include_directories(ThanLongItemConsolidator PRIVATE "${DONOR_DIR}/src" "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_definitions(ThanLongItemConsolidator PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
 target_link_libraries(ThanLongItemConsolidator PRIVATE comctl32 user32 kernel32 gdi32)
-# The exact v1.5.9 donor resource already embeds RT_MANIFEST id=1.
 target_link_options(ThanLongItemConsolidator PRIVATE /MANIFEST:NO)
-
 add_executable(route_logic_tests "${DONOR_DIR}/src/route_logic_test.cpp")
 target_include_directories(route_logic_tests PRIVATE "${DONOR_DIR}/src")
 add_executable(rotation_logic_tests "${DONOR_DIR}/src/rotation_logic_test.cpp")
 target_include_directories(rotation_logic_tests PRIVATE "${DONOR_DIR}/src")
 add_executable(trade_logic_tests src/trade_logic_test.cpp)
 target_include_directories(trade_logic_tests PRIVATE src)
-
 if(MSVC)
     target_compile_options(ThanLongCleanRouteBridge PRIVATE /utf-8 /W4 /permissive- /FIstdlib.h)
     foreach(t ThanLongItemConsolidator route_logic_tests rotation_logic_tests trade_logic_tests)
