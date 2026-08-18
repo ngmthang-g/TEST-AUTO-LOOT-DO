@@ -19,13 +19,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Rebuild source zip from text parts
+        shell: pwsh
+        run: |
+          $parts = 1..5 | ForEach-Object { "tools/ui-button-probe/source.b64.part$_" }
+          $b64 = ($parts | ForEach-Object { (Get-Content $_ -Raw).Trim() }) -join ''
+          if ($b64.Length -ne 23460) { throw "Unexpected base64 length: $($b64.Length)" }
+          $bytes = [Convert]::FromBase64String($b64)
+          if ($bytes.Length -ne 17593) { throw "Unexpected zip length: $($bytes.Length)" }
+          [IO.File]::WriteAllBytes('uibuttonprobe-source.zip', $bytes)
+
       - name: Extract source
         shell: pwsh
         run: |
-          $zip = 'tools/ui-button-probe/ThanLong_UIButtonProbe_v0.1.0_Source.zip'
           $dst = 'uibuttonprobe-src'
           if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
-          Expand-Archive -Path $zip -DestinationPath $dst -Force
+          Expand-Archive -Path 'uibuttonprobe-source.zip' -DestinationPath $dst -Force
           Get-ChildItem -Recurse $dst | Select-Object FullName
 
       - name: Configure x64
