@@ -37,6 +37,23 @@ jobs:
           Expand-Archive -Path 'uibuttonprobe-source.zip' -DestinationPath $dst -Force
           Get-ChildItem -Recurse $dst | Select-Object FullName
 
+      - name: Patch MSVC countof portability
+        shell: pwsh
+        run: |
+          $p = 'uibuttonprobe-src/ThanLong_UIButtonProbe_v0.1.0/src/bridge.cpp'
+          $s = Get-Content $p -Raw
+          if ($s -notmatch '#define _countof') {
+            $needle = '#include <cstddef>'
+            $replacement = @'
+#include <cstddef>
+#ifndef _countof
+#define _countof(a) (sizeof(a) / sizeof((a)[0]))
+#endif
+'@
+            $s = $s.Replace($needle, $replacement.TrimEnd())
+            Set-Content -Path $p -Value $s -Encoding utf8 -NoNewline
+          }
+
       - name: Configure x64
         shell: pwsh
         run: |
