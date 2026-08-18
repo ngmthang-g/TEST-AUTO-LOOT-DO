@@ -44,13 +44,8 @@ jobs:
           $s = Get-Content $p -Raw
           if ($s -notmatch '#define _countof') {
             $needle = '#include <cstddef>'
-            $replacement = @'
-#include <cstddef>
-#ifndef _countof
-#define _countof(a) (sizeof(a) / sizeof((a)[0]))
-#endif
-'@
-            $s = $s.Replace($needle, $replacement.TrimEnd())
+            $replacement = "#include <cstddef>`n#ifndef _countof`n#define _countof(a) (sizeof(a) / sizeof((a)[0]))`n#endif"
+            $s = $s.Replace($needle, $replacement)
             Set-Content -Path $p -Value $s -Encoding utf8 -NoNewline
           }
 
