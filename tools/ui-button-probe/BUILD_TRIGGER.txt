@@ -1,0 +1,2 @@
+Build verification trigger for ThanLong UI Button Probe v0.1.0.
+Retry after MSVC _countof portability fix.
