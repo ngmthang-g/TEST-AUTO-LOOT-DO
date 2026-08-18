@@ -1,0 +1,50 @@
+name: build-ui-button-probe
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'tools/ui-button-probe/**'
+      - '.github/workflows/build-ui-button-probe.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source
+        shell: pwsh
+        run: |
+          $zip = 'tools/ui-button-probe/ThanLong_UIButtonProbe_v0.1.0_Source.zip'
+          $dst = 'uibuttonprobe-src'
+          if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
+          Expand-Archive -Path $zip -DestinationPath $dst -Force
+          Get-ChildItem -Recurse $dst | Select-Object FullName
+
+      - name: Configure x64
+        shell: pwsh
+        run: |
+          cmake -S 'uibuttonprobe-src/ThanLong_UIButtonProbe_v0.1.0' -B 'uibuttonprobe-build' -A x64
+
+      - name: Build Release
+        shell: pwsh
+        run: |
+          cmake --build 'uibuttonprobe-build' --config Release --parallel
+
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path 'uibuttonprobe-dist' | Out-Null
+          Copy-Item 'uibuttonprobe-build/Release/ThanLongUIButtonProbe.exe' 'uibuttonprobe-dist/'
+          Copy-Item 'uibuttonprobe-build/Release/ThanLongUIButtonProbeBridge.dll' 'uibuttonprobe-dist/'
+          Copy-Item 'uibuttonprobe-src/ThanLong_UIButtonProbe_v0.1.0/README.txt' 'uibuttonprobe-dist/'
+          Get-ChildItem 'uibuttonprobe-dist' | Format-Table Name,Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThanLong-UIButtonProbe-v0.1.0-win-x64
+          path: uibuttonprobe-dist/*
+          if-no-files-found: error
