@@ -1,0 +1,4 @@
+# Preserve checksum-addressed transport chunks byte-for-byte on Windows checkout.
+vendor/v022_patch_parts/* -text
+vendor/v023_patch_parts/* -text
+vendor/v024_patch_parts/* -text

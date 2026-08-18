@@ -1,0 +1,81 @@
+e = sizeof(wc); wc.lpfnWndProc = TradeEditorWndProc;
++        wc.hInstance = instance_; wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
++        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
++        wc.lpszClassName = L"ThanLongTradeSequenceEditorV022";
++        if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
++            Log(L"Không đăng ký được cửa sổ CHUỖI CLICK GD."); return;
++        }
++        tradeEditor_ = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"Thần Long • Chuỗi click giao dịch v0.2.2",
++                                       WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
++                                       CW_USEDEFAULT, CW_USEDEFAULT, 900, 440,
++                                       hwnd_, nullptr, instance_, this);
++        if (!tradeEditor_) { Log(L"Không mở được cửa sổ CHUỖI CLICK GD."); return; }
++        BuildTradeEditorUi(tradeEditor_);
++        ShowWindow(tradeEditor_, SW_SHOW); UpdateWindow(tradeEditor_);
++    }
++
++    LRESULT HandleTradeEditor(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
++        switch (msg) {
++            case WM_NOTIFY: {
++                auto* hdr = reinterpret_cast<NMHDR*>(lp);
++                if (hdr && hdr->idFrom == IDC_SEQ_LIST && hdr->code == LVN_ITEMCHANGED) {
++                    const int row = SelectedTradeSequenceIndex();
++                    if (row >= 0) LoadTradeSequenceRowToEditor(row);
++                }
++                return 0;
++            }
++            case WM_COMMAND:
++                switch (LOWORD(wp)) {
++                    case IDC_SEQ_ADD: AddTradeSequenceRow(); return 0;
++                    case IDC_SEQ_DELETE: DeleteTradeSequenceRow(); return 0;
++                    case IDC_SEQ_UP: MoveTradeSequenceRow(-1); return 0;
++                    case IDC_SEQ_DOWN: MoveTradeSequenceRow(1); return 0;
++                    case IDC_SEQ_SAVE: SaveTradeSequenceRowFromEditor(); return 0;
++                    case IDC_SEQ_CAPTURE: BeginTradeSequenceCapture(); return 0;
++                    case IDC_SEQ_TEST: TestTradeSequenceRow(); return 0;
++                    case IDC_SEQ_CLOSE: DestroyWindow(hwnd); return 0;
++                    case IDC_SEQ_KIND:
++                        if (HIWORD(wp) == CBN_SELCHANGE && SendMessageW(tradeSeqKind_, CB_GETCURSEL, 0, 0) == 1) {
++                            SendMessageW(tradeSeqTarget_, CB_SETCURSEL, 1, 0);
++                        }
++                        return 0;
++                }
++                break;
++            case WM_CLOSE:
++                DestroyWindow(hwnd); return 0;
++            case WM_NCDESTROY:
++                tradeEditor_ = nullptr; tradeSeqList_ = nullptr; tradeSeqTarget_ = nullptr; tradeSeqKind_ = nullptr;
++                tradeSeqDesc_ = nullptr; tradeSeqDelay_ = nullptr; tradeSeqRepeat_ = nullptr;
++                captureTradeSequenceIndex_ = -1;
++                return DefWindowProcW(hwnd, msg, wp, lp);
++        }
++        return DefWindowProcW(hwnd, msg, wp, lp);
++    }
++
+     void PersistGlobalTradeSettings() {
+         if (tradeEnable_) tradeEnabled_ = SendMessageW(tradeEnable_, BM_GETCHECK, 0, 0) == BST_CHECKED;
+         childTriggerFreeSlots_ = 0;
+@@ -1703,7 +2075,9 @@ private:
+     }
+ 
+     void SetTradeStatus(const std::wstring& text) {
+-        if (tradeStatus_) SetWindowTextW(tradeStatus_, text.c_str());
++        if (!tradeStatus_) return;
++        const std::wstring line = L"ĐIỀU PHỐI: " + text;
++        SetWindowTextW(tradeStatus_, line.c_str());
+     }
+ 
+     void ApplySelectedTradeRole() {
+@@ -1736,6 +2110,7 @@ private:
+         }
+         SaveProfile(selected->profile);
+         for (std::size_t i = 0; i < accounts_.size(); ++i) UpdateAccountRow(static_cast<int>(i), *accounts_[i]);
++        LoadSelectedProfileToUi();
+         LogAccount(*selected, L"Đặt vai trò giao dịch = " + TradeRoleLabel(newRole));
+     }
+ 
+@@ -1839,8 +2214,9 @@ private:
+         tradeTxn_.phase = TradePhase::Idle;
+         tradeTxn_.targetPid = 0;
+         tradeTxn_.macroName.clear();
++        t

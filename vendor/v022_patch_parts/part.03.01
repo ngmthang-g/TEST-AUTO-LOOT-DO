@@ -1,0 +1,72 @@
+radeTxn_.sequenceIndex = 0; tradeTxn_.sequenceRepeatDone = 0; tradeTxn_.sequenceDueTick = 0;
+         tradeTxn_.cooldownUntil = now + 2500;
+-        SetTradeStatus(L"GD: hủy • " + reason + L" • trả quyền cho core 1.5.9");
++        SetTradeStatus(L"HỦY • " + reason + L" • nhả quyền chuột");
+     }
+ 
+     void FinishTrade(DWORD now) {
+@@ -1853,8 +2229,9 @@ private:
+         tradeTxn_.phase = TradePhase::Idle;
+         tradeTxn_.targetPid = 0;
+         tradeTxn_.macroName.clear();
++        tradeTxn_.sequenceIndex = 0; tradeTxn_.sequenceRepeatDone = 0; tradeTxn_.sequenceDueTick = 0;
+         tradeTxn_.cooldownUntil = now + 1500;
+-        SetTradeStatus(L"GD: hoàn tất • ưu tiên state mới sau giao dịch");
++        SetTradeStatus(L"HOÀN TẤT • đã nhả quyền chuột • core 1.5.9 xử lý state tiếp theo");
+     }
+ 
+     bool AdvanceTradeMacro(Account& main, Account& child, DWORD now) {
+@@ -1882,35 +2259,76 @@ private:
+         }
+     }
+ 
++    int EffectiveTradeStepRepeat(const TradeSequenceStep& step, const Account& main) const {
++        int repeat = std::max(1, step.repeat);
++        if (step.kind == 1) {
++            const int capByMain = std::max(0, main.snapshot.freeBagSpace - mainSellThreshold_);
++            repeat = std::min(repeat, std::min(maxTransferClicks_, capByMain));
++        }
++        return repeat;
++    }
++
++    bool ExecuteTradeSequenceTick(Account& main, Account& child, DWORD now) {
++        if (tradeTxn_.sequenceIndex >= tradeSequence_.size()) {
++            FinishTrade(now); return true;
++        }
++        if (tradeTxn_.sequenceDueTick != 0 && static_cast<LONG>(now - tradeTxn_.sequenceDueTick) < 0) return true;
++        TradeSequenceStep& step = tradeSequence_[tradeTxn_.sequenceIndex];
++        const int effectiveRepeat = EffectiveTradeStepRepeat(step, main);
++        if (step.kind == 1 && effectiveRepeat <= 0) {
++            AbortTrade(L"MAIN không còn sức chứa an toàn cho bước CHUYỂN ĐỒ", now); return false;
++        }
++        Account& target = step.target == 0 ? main : child;
++        if (!IsWindow(target.game.window)) { AbortTrade(L"mất cửa sổ đích ở chuỗi click", now); return false; }
++        POINT point{}; std::wstring error;
++        if (!ScaleClickPoint(target.game, step.point, point, error)) {
++            AbortTrade(L"bước " + std::to_wstring(tradeTxn_.sequenceIndex + 1) + L" sai tọa: " + error, now); return false;
++        }
++        const std::wstring targetLabel = step.target == 0 ? L"MAIN" : L"CON" + std::to_wstring(tradeTxn_.childSlot);
++        const std::wstring desc = step.description.empty() ? TradeStepKindLabel(step) : step.description;
++        SetTradeStatus(L"MAIN ↔ CON" + std::to_wstring(tradeTxn_.childSlot) + L" • bước " +
++                       std::to_wstring(tradeTxn_.sequenceIndex + 1) + L"/" + std::to_wstring(tradeSequence_.size()) +
++                       L" • chuột → " + targetLabel + L" • " + desc + L" (" +
++                       std::to_wstring(tradeTxn_.sequenceRepeatDone + 1) + L"/" + std::to_wstring(effectiveRepeat) + L")");
++        target.runtime.status = L"ĐIỀU PHỐI CHUỘT • " + desc;
++        if (!RealInputClick(target, point, error)) {
++            AbortTrade(L"REAL INPUT bước " + std::to_wstring(tradeTxn_.sequenceIndex + 1) + L" FAIL: " + error, now); return false;
++        }
++        ++tradeTxn_.sequenceRepeatDone;
++        tradeTxn_.sequenceDueTick = GetTickCount() + static_cast<DWORD>(step.delayMs);
++        if (tradeTxn_.sequenceRepeatDone >= effectiveRepeat) {
++            tradeTxn_.sequenceRepeatDone = 0;
++            ++tradeTxn_.sequenceIndex;
++        }
++        return true;
++    }
++
+     void TickTradeCoordinator(DWORD now) {
+-        if (!tradeEnabled_) { SetTradeStatus(L"GD: OFF"); return; }
++        if (!tradeEnabled_) { SetTradeStatus(L"OFF"); return; }
+ 
+         Account* activeMain = tradeTxn_.phase == TradePhase::Idle ? nullptr : AccountByPid(tradeTxn_.mainPid);
+         Account* activeChild = tradeTxn_.phase == TradePhase::Idle ? nullptr : 

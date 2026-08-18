@@ -1,33 +1,82 @@
-name: build-remote-loot-poc
+name: build-item-consolidator-v024
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - agent/item-consolidator-v0.2.4-recorder-copy
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  windows-x64:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
+      - name: Rehydrate Clean Route v1.5.9 + v0.2.1 + v0.2.2 + v0.2.3 + v0.2.4 REC patch
+        shell: pwsh
+        run: .\tools\rehydrate_v159.ps1
       - name: Configure x64
-        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
-
+        run: cmake -S . -B build -A x64
       - name: Build Release
         run: cmake --build build --config Release --parallel
-
+      - name: Route logic self-test
+        run: .\build\Release\route_logic_tests.exe
+      - name: Rotation logic self-test
+        run: .\build\Release\rotation_logic_tests.exe
+      - name: Exact trade scheduler self-test
+        run: .\build\Release\trade_logic_tests.exe
+      - name: Static v0.2.4 REC/copy central-arbiter audit
+        shell: pwsh
+        run: |
+          $c = Get-Content generated\donor159\src\controller.cpp -Raw
+          foreach ($required in @(
+            'mainSellThreshold_ = 6',
+            'childTriggerFreeSlots_ = 0',
+            'coordinatorInputFreeze_',
+            'CoordinatorClick',
+            'PerformRealInputClickDirect',
+            'BĐPT CẤP QUYỀN CHUỘT',
+            'UNFREEZE ALL',
+            'childTradeSequence',
+            'mainTradeSequence_',
+            'CHUỖI CLICK BÁN ĐỒ',
+            'CHUỖI GD MAIN',
+            'SetForegroundWindow',
+            'SetCursorPos',
+            'SendInput',
+            'freeBagSpace <= mainSellThreshold_',
+            'freeBagSpace <= 0',
+            'kRecordTimer = 2',
+            'coordinatorRecording_',
+            'GetAsyncKeyState(VK_LBUTTON)',
+            'REC ĐANG GHI',
+            'LẤY 6 CLICK CỦA ACC...',
+            'CopySixClicksFromAnotherAccount',
+            'CopySelectedTradeRows',
+            'CopySelectedSellRows',
+            'RecorderAllowsAccount',
+            'FindSharedMainStepByPoint',
+            'tradeClipboard_',
+            'sellClipboard_'
+          )) {
+            if ($c -notmatch [regex]::Escape($required)) { throw "Missing v0.2.4 token: $required" }
+          }
+          if ($c -match 'roundRobinCursor_') { throw 'Round-robin must not exist; fixed CON1..CON6 priority required' }
+          if ($c -match 'tradeGlobalFreeze_') { throw 'Whole-transaction global freeze from v0.2.2 must be removed' }
+          $rawSend = ([regex]::Matches($c, 'SendInput\(')).Count
+          if ($rawSend -ne 2) { throw "Unexpected SendInput call count: $rawSend" }
+          Write-Host 'V0.2.4 REC COPY CENTRAL ARBITER STATIC AUDIT PASS'
       - name: Stage artifact
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item build/Release/RemoteLootProbe.exe dist/
-          Copy-Item build/Release/RemoteLootBridge.dll dist/
-          Copy-Item README.md dist/
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          New-Item -ItemType Directory -Force stage | Out-Null
+          Copy-Item build\Release\ThanLongItemConsolidator.exe stage\ThanLongItemConsolidator_v0.2.4.exe
+          Copy-Item build\Release\ThanLongCleanRouteBridge.dll stage\ThanLongCleanRouteBridge.dll
+          Copy-Item README.md,PROJECT_KNOWLEDGE.md,CHANGELOG.md stage\
+          Copy-Item macros stage\macros -Recurse
+          Copy-Item docs\history\VERSION_v0.2.4.md stage\VERSION_v0.2.4.md
+      - uses: actions/upload-artifact@v4
         with:
-          name: RemoteLootPoC-v0.1.0-win-x64
-          path: dist/*
-          if-no-files-found: error
+          name: ThanLongItemConsolidator-v0.2.4-win-x64
+          path: stage

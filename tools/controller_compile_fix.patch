@@ -1,0 +1,19 @@
+--- a/generated/donor159/src/controller.cpp
++++ b/generated/donor159/src/controller.cpp
+@@ -950,6 +950,8 @@
+     r.status = running ? L"Đang giám sát" : L"Đã dừng";
+ }
+ 
++enum class TradePhase { Idle, PrepareMain, PrepareChild, Invite, Accept, Give, ConfirmChild, ConfirmMain };
++
+ class App {
+ public:
+     bool Create(HINSTANCE instance) {
+@@ -4124,7 +4126,6 @@
+     MacroLibrary tradeMacros_{};
+     BackgroundClicker backgroundClicker_{};
+     MacroRunner tradeRunner_{};
+-    enum class TradePhase { Idle, PrepareMain, PrepareChild, Invite, Accept, Give, ConfirmChild, ConfirmMain };
+     struct TradeTxn { TradePhase phase = TradePhase::Idle; DWORD mainPid = 0; DWORD childPid = 0; int childSlot = 0; DWORD startedTick = 0; DWORD cooldownUntil = 0; DWORD targetPid = 0; std::string macroName; } tradeTxn_{};
+     bool tradeEnabled_ = true;
+     int childTriggerFreeSlots_ = 0; // fixed FULL-only rule
