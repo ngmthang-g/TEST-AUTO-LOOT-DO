@@ -1,12 +1,13 @@
-# Thần Long NPC / GameDialog Probe v0.1.1
+# Thần Long NPC / GameDialog Probe v0.1.2
 
 Probe **chỉ đọc** để chốt runtime của NPC truyền tống như **Xa Truyền Bình / Xa Truyền Công**.
 
-## Sửa trong v0.1.1
+## Sửa trong v0.1.2
 
-- Fix console Windows chỉ hiện `Th` rồi trông như treo.
-- Chuyển stdin/stdout/stderr sang UTF-16 native bằng `_O_U16TEXT` trước khi dùng `std::wcout/std::wcin`.
-- Không thay đổi logic đọc NPC/GameDialog.
+- Cho phép chọn client bằng **STT** (`1`, `2`, ...) hoặc nhập thẳng **PID** (`13304`, `14748`, ...).
+- Nhập sai STT/PID sẽ báo lỗi và hỏi lại, không còn tự đóng EXE.
+- Nếu attach thất bại, tool giữ cửa sổ lại để đọc lỗi trước khi đóng.
+- Giữ nguyên fix UTF-16 console của v0.1.1 và không thay đổi logic đọc NPC/GameDialog.
 
 ## Probe làm gì
 
@@ -27,6 +28,7 @@ Probe **chỉ đọc** để chốt runtime của NPC truyền tống như **Xa 
 
 - Mở game và đứng cạnh Xa Truyền Bình hoặc Xa Truyền Công.
 - Chạy `ThanLongNpcDialogProbe.exe` cùng quyền với game.
+- Khi danh sách client hiện ra, có thể nhập **STT 1/2/... hoặc nhập thẳng PID**. Nhập sai tool sẽ hỏi lại, không tự thoát.
 - Chọn đúng PID.
 - Chọn mục **2** để dump NPC live quanh nhân vật.
 - Chọn mục **4**, sau đó quay sang game và **tự click NPC**. Probe chờ tối đa 15 giây và tự dump GameDialog khi thấy cửa sổ mở.
