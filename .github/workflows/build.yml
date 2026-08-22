@@ -34,7 +34,7 @@ jobs:
           Remove-Item scripts/apply_v019.py.gz.b64 -Force
 
       - name: Commit normalized v0.1.9 source back to test branch
-        if: github.ref == 'refs/heads/fix-probe-v0.1.9'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/fix-probe-v0.1.9') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix-probe-v0.1.9')
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
