@@ -1,31 +1,60 @@
-# Thần Long NPC / UI Live Probe v0.1.4
+# Thần Long NPC / GameDialog Probe v0.1.5
 
-Probe **chỉ đọc** để xác định NPC Xa Truyền và semantic của bảng chọn map.
+Bản test callback semantic có kiểm soát cho **Xa Truyền Công / Xa Truyền Bình**.
 
-## Sửa trong v0.1.4
+## Đã chốt từ runtime v0.1.4
 
-- Mục **4** lấy **baseline UI** trước khi người dùng click NPC, sau đó so sánh cấu trúc control mỗi 500 ms. Không còn dừng chỉ vì scan MainUI trả `OK`.
-- Khi bắt được bảng Xa Truyền, log mục 4 chỉ ghi **UI DELTA**: các control mới xuất hiện sau click NPC.
-- Loại false-positive tên môn phái/map nằm trong `TeamMemberList`, `MiniTeamFrame`, `RoleHeader`, `SpiritHeader`; ví dụ `Nga My` của thành viên đội không còn bị coi là nút truyền tống.
-- `Tag` boxed kiểu `System.Double` / `System.Single` được giải mã thành **giá trị số thật** thay vì `<Double>` / `<Single>`. Nếu GameDialog dùng `Tag = selectionID`, log sẽ hiện ID trực tiếp.
-- Giữ sửa lỗi v0.1.3: IL2CPP generic `Dictionary.Enumerator` / `KeyValuePair` value-type được unbox đúng, nên `GetNearbyObjects()` không còn lặp 4096 key giả.
+GameDialog Xa Truyền dùng các UIButton có `Tag/selectionID` ổn định:
 
-## Cách test
+- `200001` Đại Lý
+- `200002` Lạc Dương
+- `200003` Tô Châu
+- `200004` Nam Hải
+- `200005` Thảo Nguyên
+- `200006` Hoàng Long Phủ
+- `200007` Miêu Cương
+- `200008` Thạch Lâm
+- `200009` Võ Di
+- `9999` Ta chỉ đi ngang qua / đóng dialog
 
-1. Đứng gần **Xa Truyền Công** ở Côn Lôn Sơn hoặc **Xa Truyền Bình** ở Lâu Lan.
-2. Chạy EXE cùng quyền với game, chọn client bằng STT hoặc PID.
-3. Bấm **4**. Tool chụp baseline UI trước.
-4. Quay sang game và **tự click NPC Xa Truyền** trong 15 giây.
-5. Giữ bảng chọn map mở. Khi xuất hiện UI mới có `Đại Lý`, `Lạc Dương`, `Tô Châu`..., tool ghi `UI DELTA` vào `NpcDialogProbe_output.txt`.
-6. Nếu mục 4 không bắt được, giữ bảng NPC đang mở rồi chọn **3** để dump toàn UI live.
+Tên instance `Button_-xxxxx` là động và **không được dùng làm identity**.
 
-## Read-only
+## Mới trong v0.1.5
 
-Build này không có command gameplay mutation: không `ClickNPC`, không `TryClickUI`, không `SendInput`, không AutoPath, không gửi selection, không gọi `HandleClickEvent`.
+Mục **6 — TEST CALLBACK** gọi trực tiếp `UIButton.HandleClickEvent()` trên button Xa Truyền sau khi kiểm tra fail-closed:
 
-## File cần để cùng thư mục
+1. selectionID bắt buộc nằm trong whitelist ở trên;
+2. phải có `GameDialog` ACTIVE với `Title` là `Xa Truyền Công`, `Xa Truyền Bình`, `Xa Truyền Chí` hoặc `Xa Truyền Tín`;
+3. button phải là `UIButton` ACTIVE bên trong `GameDialog/ButtonList`;
+4. button phải khớp **cả Text lẫn Tag/selectionID**;
+5. nếu đọc được `Interactable=0` thì từ chối;
+6. người dùng phải chọn destination và gõ `GO` trước khi callback.
+
+Không dùng tọa độ, không `TryClickUI`, không `SendInput`, không scroll.
+
+## Cách test callback
+
+1. Đứng cạnh Xa Truyền Công/Bình.
+2. **Tự click NPC** để bảng GameDialog truyền tống hiện lên.
+3. Chạy tool, chọn đúng client.
+4. Chọn mục **6**.
+5. Chọn một destination, nên test đầu tiên bằng **Đại Lý [200001]**.
+6. Tool in lại Text + selectionID và yêu cầu gõ `GO`.
+7. Nếu guard PASS, bridge gọi `UIButton.HandleClickEvent()` trực tiếp.
+8. Tool chờ 2.5 giây rồi đọc lại RoleID/MapID/Pos để hỗ trợ xác nhận kết quả.
+
+## Các mục khác
+
+- 1: đọc RoleID / MapID / Pos — read-only.
+- 2: dump Nearby objects — read-only.
+- 3: dump UI live — read-only.
+- 4: baseline + UI delta khi tự click NPC — read-only.
+- 5: dump Nearby + UI — read-only.
+- 6: **mutation test có kiểm soát** — callback Xa Truyền.
+
+## File cần cùng thư mục
 
 - `ThanLongNpcDialogProbe.exe`
 - `ThanLongNpcDialogProbeBridge.dll`
 
-Output: `NpcDialogProbe_output.txt`.
+Log: `NpcDialogProbe_output.txt`.

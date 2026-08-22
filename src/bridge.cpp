@@ -11,6 +11,7 @@
 #include <sstream>
 #include <iomanip>
 #include <initializer_list>
+#include <utility>
 
 using namespace thanlong_probe;
 
@@ -826,6 +827,120 @@ ResultCode DumpUiLive(std::wstring& detail) {
     return travelRows.empty() ? ResultCode::GameDialogNotOpen : ResultCode::Ok;
 }
 
+
+const wchar_t* TravelSelectionText(std::int64_t selectionId) {
+    switch (selectionId) {
+        case 200001: return L"Đại Lý";
+        case 200002: return L"Lạc Dương";
+        case 200003: return L"Tô Châu";
+        case 200004: return L"Nam Hải";
+        case 200005: return L"Thảo Nguyên";
+        case 200006: return L"Hoàng Long Phủ";
+        case 200007: return L"Miêu Cương";
+        case 200008: return L"Thạch Lâm";
+        case 200009: return L"Võ Di";
+        case 9999: return L"Ta chỉ đi ngang qua";
+        default: return nullptr;
+    }
+}
+
+bool IsActiveUiObject(Il2CppObject* object) {
+    double active = 1.0;
+    bool integral = true;
+    if (NumberMember(object, "ActiveInHierarchy", active, integral)) return active >= 0.5;
+    return true;
+}
+
+ResultCode ClickTravelSelection(std::int64_t selectionId, std::wstring& detail) {
+    const wchar_t* expectedText = TravelSelectionText(selectionId);
+    if (!expectedText) {
+        detail = L"SAFETY REJECT: selectionID không nằm trong whitelist 200001..200009 hoặc 9999.";
+        return ResultCode::SafetyRejected;
+    }
+
+    std::vector<Il2CppObject*> objects;
+    std::int32_t dictionaryCount = 0;
+    std::uintptr_t capacity = 0;
+    std::wstring why;
+    if (!EnumerateUiObjects(objects, dictionaryCount, capacity, why)) {
+        detail = L"Không enumerate được UIObject.instances: " + why;
+        return ResultCode::EnumerationFailed;
+    }
+
+    std::wstring dialogTitle;
+    for (Il2CppObject* object : objects) {
+        if (!object || !IsActiveUiObject(object)) continue;
+        UiRow row = ReadUiRow(object);
+        if (row.name != L"Title") continue;
+        if (row.path.find(L"GameDialog") == std::wstring::npos) continue;
+        if (row.text == L"Xa Truyền Công" || row.text == L"Xa Truyền Bình" ||
+            row.text == L"Xa Truyền Chí" || row.text == L"Xa Truyền Tín") {
+            dialogTitle = row.text;
+            break;
+        }
+    }
+
+    if (dialogTitle.empty()) {
+        detail = L"SAFETY REJECT: chưa thấy GameDialog đang ACTIVE có Title Xa Truyền Công/Bình/Chí/Tín. "
+                 L"Hãy tự click NPC và giữ bảng truyền tống mở rồi thử lại.";
+        return ResultCode::GameDialogNotOpen;
+    }
+
+    UiRow target;
+    bool found = false;
+    const std::wstring expectedTag = std::to_wstring(selectionId);
+    for (Il2CppObject* object : objects) {
+        if (!object || !IsActiveUiObject(object)) continue;
+        UiRow row = ReadUiRow(object);
+        if (!row.clickable) continue;
+        if (row.className.find(L"UIButton") == std::wstring::npos) continue;
+        if (row.path.find(L"GameDialog") == std::wstring::npos ||
+            row.path.find(L"ButtonList") == std::wstring::npos) continue;
+        if (row.tag != expectedTag) continue;
+        if (row.text != expectedText) continue;
+        target = std::move(row);
+        found = true;
+        break;
+    }
+
+    if (!found || !target.object) {
+        detail = L"Không tìm thấy UIButton ACTIVE khớp đồng thời text=\"" +
+                 std::wstring(expectedText) + L"\" và Tag/selectionID=" + expectedTag +
+                 L" bên trong GameDialog/ButtonList.";
+        return ResultCode::SelectionNotFound;
+    }
+
+    double interactable = 1.0;
+    bool integral = true;
+    if (NumberMember(target.object, "Interactable", interactable, integral) && interactable < 0.5) {
+        detail = L"SAFETY REJECT: UIButton đích đang Interactable=0.";
+        return ResultCode::SafetyRejected;
+    }
+
+    Il2CppClass* klass = gApi.object_get_class(target.object);
+    const MethodInfo* handleClick = Method(klass, "HandleClickEvent", 0);
+    if (!handleClick) {
+        detail = L"UIButton đích không resolve được HandleClickEvent().";
+        return ResultCode::MethodNotFound;
+    }
+
+    Il2CppObject* ignored = nullptr;
+    if (!Invoke(handleClick, ManagedThis(target.object), nullptr, ignored)) {
+        detail = L"Managed exception khi gọi UIButton.HandleClickEvent().";
+        return ResultCode::InvokeException;
+    }
+
+    std::wostringstream out;
+    out << L"CALLBACK ĐÃ GỌI • GameDialog=\"" << dialogTitle << L"\""
+        << L" • text=\"" << expectedText << L"\""
+        << L" • selectionID=" << selectionId;
+    if (!target.name.empty()) out << L" • button=" << target.name;
+    if (!target.path.empty()) out << L"\nparents=" << target.path;
+    out << L"\nĐã invoke trực tiếp UIButton.HandleClickEvent(); không dùng tọa độ/TryClick/SendInput/scroll.";
+    detail = out.str();
+    return ResultCode::Ok;
+}
+
 bool EnsureShared() {
     if (gShared) return true;
     wchar_t mappingName[96]{};
@@ -864,13 +979,16 @@ void Process() {
             switch (gShared->command) {
                 case Command::ValidateContext:
                     result = ResultCode::Ok;
-                    detail = L"PASS READ-ONLY: đúng window thread; build này không chứa command gameplay mutation.";
+                    detail = L"PASS: đúng window thread. v0.1.5 có 1 command mutation có kiểm soát: callback Xa Truyền chỉ khi người dùng chọn explicit trong menu.";
                     break;
                 case Command::DumpNearbyObjects:
                     result = DumpNearby(detail);
                     break;
                 case Command::DumpGameDialog:
                     result = DumpUiLive(detail);
+                    break;
+                case Command::ClickTravelSelection:
+                    result = ClickTravelSelection(gShared->arg0, detail);
                     break;
                 case Command::ReadPlayerState: {
                     std::wstring player;
