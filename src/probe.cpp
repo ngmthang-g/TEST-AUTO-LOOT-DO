@@ -240,7 +240,7 @@ private:
 
 void Menu() {
     std::wcout
-        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.1 ==========\n"
+        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.2 ==========\n"
         << L"CHỈ ĐỌC: không ClickNPC, TryClick, SendInput, AutoPath, gửi selection.\n"
         << L"1. Đọc RoleID / MapID / Pos\n"
         << L"2. DUMP NPC/object live quanh đây\n"
@@ -267,12 +267,15 @@ int wmain() {
     EnableNativeUnicodeConsole();
 
     std::wcout
-        << L"Thần Long NPC / GameDialog Probe v0.1.1 — READ ONLY\n"
+        << L"Thần Long NPC / GameDialog Probe v0.1.2 — READ ONLY\n"
         << L"Output: NpcDialogProbe_output.txt\n\n";
 
     auto games = Clients();
     if (games.empty()) {
-        std::wcerr << L"Không tìm thấy client có GameAssembly.dll\n";
+        std::wcerr << L"Không tìm thấy client có GameAssembly.dll\n"
+                   << L"Nhấn Enter để đóng tool...";
+        std::wstring waitLine;
+        std::getline(std::wcin, waitLine);
         return 2;
     }
 
@@ -281,22 +284,48 @@ int wmain() {
                    << L" • PID " << games[i].pid << L"\n";
     }
 
-    std::wcout << L"Chọn client: ";
     std::wstring line;
-    std::getline(std::wcin, line);
+    std::size_t selectedIndex = games.size();
+    for (;;) {
+        std::wcout << L"Chọn client bằng STT (1-" << games.size() << L") hoặc nhập PID: ";
+        std::getline(std::wcin, line);
 
-    std::size_t index = 0;
-    try {
-        index = std::stoul(line);
-    } catch (...) {
-        return 3;
+        unsigned long value = 0;
+        try {
+            std::size_t used = 0;
+            value = std::stoul(line, &used, 10);
+            if (used != line.size()) throw std::invalid_argument("extra characters");
+        } catch (...) {
+            std::wcout << L"Giá trị không hợp lệ. Ví dụ: 1 hoặc PID 13304. Hãy nhập lại.\n";
+            continue;
+        }
+
+        if (value >= 1 && value <= games.size()) {
+            selectedIndex = static_cast<std::size_t>(value - 1);
+            break;
+        }
+
+        for (std::size_t i = 0; i < games.size(); ++i) {
+            if (games[i].pid == static_cast<DWORD>(value)) {
+                selectedIndex = i;
+                break;
+            }
+        }
+
+        if (selectedIndex < games.size()) break;
+        std::wcout << L"Không có client nào có STT/PID " << value
+                   << L". Tool sẽ không tự thoát; hãy nhập lại.\n";
     }
-    if (index < 1 || index > games.size()) return 3;
+
+    std::wcout << L"Đã chọn: " << games[selectedIndex].title
+               << L" • PID " << games[selectedIndex].pid << L"\n";
 
     Session session;
     std::wstring error;
-    if (!session.Open(games[index - 1], error)) {
-        std::wcerr << L"Attach fail: " << error << L"\n";
+    if (!session.Open(games[selectedIndex], error)) {
+        std::wcerr << L"Attach fail: " << error << L"\n"
+                   << L"Nhấn Enter để đóng tool...";
+        std::getline(std::wcin, line);
         return 4;
     }
 
