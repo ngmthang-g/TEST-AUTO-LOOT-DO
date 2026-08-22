@@ -100,6 +100,7 @@ const wchar_t* ResultText(ResultCode r) {
         case ResultCode::FieldReadFailed: return L"FIELD_READ_FAILED";
         case ResultCode::SafetyRejected: return L"SAFETY_REJECTED";
         case ResultCode::SelectionNotFound: return L"SELECTION_NOT_FOUND";
+        case ResultCode::ConfirmNotFound: return L"CONFIRM_NOT_FOUND";
         default: return L"ERROR";
     }
 }
@@ -111,6 +112,7 @@ const wchar_t* CommandText(Command c) {
         case Command::DumpGameDialog: return L"DUMP_GAMEDIALOG";
         case Command::ReadPlayerState: return L"PLAYER";
         case Command::ClickTravelSelection: return L"CALLBACK_TRAVEL";
+        case Command::ClickMessageBoxConfirm: return L"CALLBACK_CONFIRM";
         default: return L"UNKNOWN";
     }
 }
@@ -359,9 +361,29 @@ const wchar_t* TravelChoiceText(int choice, std::int64_t& selectionId) {
     }
 }
 
+
+
+bool ParseMapId(const std::wstring& text, std::int64_t& mapId) {
+    mapId = -1;
+    const std::wstring token = L"MapID=";
+    const std::size_t pos = text.find(token);
+    if (pos == std::wstring::npos) return false;
+    std::size_t begin = pos + token.size();
+    std::size_t end = begin;
+    if (end < text.size() && text[end] == L'-') ++end;
+    while (end < text.size() && text[end] >= L'0' && text[end] <= L'9') ++end;
+    if (end <= begin) return false;
+    try {
+        mapId = std::stoll(text.substr(begin, end - begin));
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 void PrintTravelCallbackMenu() {
     std::wcout
-        << L"\n=== TEST CALLBACK XA TRUYỀN — PHẢI TỰ MỞ GAMEDIALOG TRƯỚC ===\n"
+        << L"\n=== TEST CHU TRÌNH XA TRUYỀN — CHỌN MAP → XÁC NHẬN ===\n"
         << L" 1. Đại Lý          [200001]\n"
         << L" 2. Lạc Dương       [200002]\n"
         << L" 3. Tô Châu         [200003]\n"
@@ -377,14 +399,14 @@ void PrintTravelCallbackMenu() {
 
 void Menu() {
     std::wcout
-        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.5 ==========\n"
-        << L"Mục 1-5 chỉ đọc. Mục 6 là callback TEST có kiểm soát và SẼ tác động game.\n"
+        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.6 ==========\n"
+        << L"Mục 1-5 chỉ đọc. Mục 6 chạy chu trình callback Xa Truyền → MessageBox Xác nhận và SẼ tác động game.\n"
         << L"1. Đọc RoleID / MapID / Pos\n"
         << L"2. DUMP NPC/object live quanh đây\n"
         << L"3. DUMP UI LIVE (Text + Tag + parent path)\n"
         << L"4. CHỜ bảng Xa Truyền 15 giây — rồi tự click NPC\n"
         << L"5. DUMP cả Nearby + UI live\n"
-        << L"6. TEST CALLBACK UIButton.HandleClickEvent() của Xa Truyền\n"
+        << L"6. TEST CHU TRÌNH Xa Truyền: chọn map → Xác nhận\n"
         << L"0. Thoát\n> ";
 }
 
@@ -403,8 +425,8 @@ int wmain() {
     EnableNativeUnicodeConsole();
 
     std::wcout
-        << L"Thần Long NPC / GameDialog Probe v0.1.5 — CONTROLLED CALLBACK TEST\n"
-        << L"Mục 1-5 read-only; mục 6 mới có quyền gọi callback Xa Truyền.\n"
+        << L"Thần Long NPC / GameDialog Probe v0.1.6 — FULL TRAVEL CALLBACK TEST\n"
+        << L"Mục 1-5 read-only; mục 6 callback lựa chọn Xa Truyền rồi callback MessageBox Xác nhận.\n"
         << L"Output: NpcDialogProbe_output.txt\n\n";
 
     auto games = Clients();
@@ -551,10 +573,59 @@ int wmain() {
                 continue;
             }
 
-            if (session.Send(Command::ClickTravelSelection, 7000, true, selectionId) &&
-                session.Last() == ResultCode::Ok) {
-                std::wcout << L"Callback đã được invoke. Chờ 2.5 giây rồi đọc trạng thái nhân vật...\n";
-                Sleep(2500);
+            std::int64_t mapBefore = -1;
+            if (session.Send(Command::ReadPlayerState, 7000, false) && session.Last() == ResultCode::Ok) {
+                (void)ParseMapId(session.Text(), mapBefore);
+            }
+
+            if (!(session.Send(Command::ClickTravelSelection, 7000, true, selectionId) &&
+                  session.Last() == ResultCode::Ok)) {
+                continue;
+            }
+
+            std::wcout << L"Đã callback điểm đến. Đang chờ MessageBox Xác nhận xuất hiện...\n";
+            bool confirmed = false;
+            for (int i = 0; i < 30; ++i) {
+                Sleep(200);
+                if (!session.Send(Command::ClickMessageBoxConfirm, 5000, false)) continue;
+                if (session.Last() == ResultCode::Ok) {
+                    Log(Command::ClickMessageBoxConfirm, session.Last(), session.Text());
+                    std::wcout << L"\n[OK] CALLBACK XÁC NHẬN\n"
+                               << session.Text() << L"\n[Đã ghi NpcDialogProbe_output.txt]\n";
+                    confirmed = true;
+                    break;
+                }
+                if (session.Last() == ResultCode::SafetyRejected) {
+                    Log(Command::ClickMessageBoxConfirm, session.Last(), session.Text());
+                    std::wcout << L"\n[SAFETY_REJECTED]\n" << session.Text() << L"\n";
+                    break;
+                }
+            }
+
+            if (!confirmed) {
+                std::wcout << L"Không callback được Xác nhận trong 6 giây. Giữ popup đang mở rồi chọn mục 3 để dump UI.\n";
+                continue;
+            }
+
+            std::wcout << L"Đã callback Xác nhận. Đang chờ MapID đổi để xác minh chu trình...\n";
+            bool changed = false;
+            for (int i = 0; i < 30; ++i) {
+                Sleep(500);
+                if (!session.Send(Command::ReadPlayerState, 7000, false) || session.Last() != ResultCode::Ok) continue;
+                std::int64_t mapNow = -1;
+                if (!ParseMapId(session.Text(), mapNow)) continue;
+                if (mapBefore < 0 || mapNow != mapBefore) {
+                    Log(Command::ReadPlayerState, session.Last(), session.Text());
+                    std::wcout << L"\n[OK] MAP ĐÃ THAY ĐỔI"
+                               << (mapBefore >= 0 ? L" • trước=" + std::to_wstring(mapBefore) : L"")
+                               << L" • sau=" << mapNow << L"\n"
+                               << session.Text() << L"\n";
+                    changed = true;
+                    break;
+                }
+            }
+            if (!changed) {
+                std::wcout << L"Đã callback Xác nhận nhưng chưa thấy MapID đổi trong 15 giây. Đọc trạng thái hiện tại:\n";
                 session.Send(Command::ReadPlayerState, 7000, true);
             }
         }

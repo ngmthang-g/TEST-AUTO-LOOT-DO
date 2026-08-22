@@ -1,10 +1,10 @@
-# Thần Long NPC / GameDialog Probe v0.1.5
+# Thần Long NPC / GameDialog Probe v0.1.6
 
-Bản test callback semantic có kiểm soát cho **Xa Truyền Công / Xa Truyền Bình**.
+Bản test chu trình semantic callback có kiểm soát cho **Xa Truyền Công / Xa Truyền Bình / Xa Truyền Chí / Xa Truyền Tín**.
 
-## Đã chốt từ runtime v0.1.4
+## Runtime đã chốt
 
-GameDialog Xa Truyền dùng các UIButton có `Tag/selectionID` ổn định:
+GameDialog Xa Truyền dùng các `UIButton` có `Tag/selectionID` ổn định:
 
 - `200001` Đại Lý
 - `200002` Lạc Dương
@@ -19,29 +19,40 @@ GameDialog Xa Truyền dùng các UIButton có `Tag/selectionID` ổn định:
 
 Tên instance `Button_-xxxxx` là động và **không được dùng làm identity**.
 
-## Mới trong v0.1.5
+## Mới trong v0.1.6
 
-Mục **6 — TEST CALLBACK** gọi trực tiếp `UIButton.HandleClickEvent()` trên button Xa Truyền sau khi kiểm tra fail-closed:
+Mục **6 — TEST CHU TRÌNH Xa Truyền** chạy:
+
+`GameDialog Xa Truyền -> callback destination -> chờ MessageBox -> callback Xác nhận -> chờ MapID đổi`.
+
+### Guard destination
 
 1. selectionID bắt buộc nằm trong whitelist ở trên;
-2. phải có `GameDialog` ACTIVE với `Title` là `Xa Truyền Công`, `Xa Truyền Bình`, `Xa Truyền Chí` hoặc `Xa Truyền Tín`;
+2. phải có `GameDialog` ACTIVE với `Title` thuộc nhóm Xa Truyền;
 3. button phải là `UIButton` ACTIVE bên trong `GameDialog/ButtonList`;
-4. button phải khớp **cả Text lẫn Tag/selectionID**;
-5. nếu đọc được `Interactable=0` thì từ chối;
-6. người dùng phải chọn destination và gõ `GO` trước khi callback.
+4. button phải khớp **cả Text + Tag/selectionID**;
+5. nếu `Interactable=0` thì từ chối;
+6. người dùng phải gõ `GO`.
+
+### Guard Xác nhận
+
+Sau callback destination, controller tạo request mới sau mỗi 200 ms để UI thread có thời gian sinh popup. Bridge chỉ xét `UIButton` ACTIVE + interactable có parent path chứa `MessageBox`, loại nhãn âm như Hủy/Không/Đóng và chỉ nhận nhãn dương như `Xác nhận`, `Đồng ý`, `OK`, `Có`. Nếu có nhiều candidate đồng hạng thì fail-closed.
+
+Không block game UI thread bằng Sleep trong Bridge; toàn bộ chờ/poll nằm ở controller và mỗi callback là một request game-thread riêng.
+
+Sau callback Xác nhận, tool poll `ReadPlayerState` tối đa 15 giây và xác minh `MapID` thay đổi.
 
 Không dùng tọa độ, không `TryClickUI`, không `SendInput`, không scroll.
 
-## Cách test callback
+## Cách test
 
-1. Đứng cạnh Xa Truyền Công/Bình.
-2. **Tự click NPC** để bảng GameDialog truyền tống hiện lên.
+1. Đứng cạnh Xa Truyền.
+2. **Tự mở GameDialog Xa Truyền**.
 3. Chạy tool, chọn đúng client.
 4. Chọn mục **6**.
-5. Chọn một destination, nên test đầu tiên bằng **Đại Lý [200001]**.
-6. Tool in lại Text + selectionID và yêu cầu gõ `GO`.
-7. Nếu guard PASS, bridge gọi `UIButton.HandleClickEvent()` trực tiếp.
-8. Tool chờ 2.5 giây rồi đọc lại RoleID/MapID/Pos để hỗ trợ xác nhận kết quả.
+5. Chọn destination, ví dụ **Đại Lý [200001]**.
+6. Gõ `GO`.
+7. Tool tự callback destination, tự chờ/callback MessageBox Xác nhận, rồi theo dõi MapID.
 
 ## Các mục khác
 
@@ -50,7 +61,11 @@ Không dùng tọa độ, không `TryClickUI`, không `SendInput`, không scroll
 - 3: dump UI live — read-only.
 - 4: baseline + UI delta khi tự click NPC — read-only.
 - 5: dump Nearby + UI — read-only.
-- 6: **mutation test có kiểm soát** — callback Xa Truyền.
+- 6: **mutation test có kiểm soát** — chọn map + Xác nhận.
+
+## Tài liệu data
+
+Xem `SEMANTIC_UI_CALLBACK_DATA.md` để tái sử dụng cơ chế cho các NPC/UI khác.
 
 ## File cần cùng thư mục
 
