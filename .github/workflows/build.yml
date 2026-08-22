@@ -26,13 +26,13 @@ jobs:
           Copy-Item build/Release/ThanLongNpcDialogProbe.exe artifact/
           Copy-Item build/Release/ThanLongNpcDialogProbeBridge.dll artifact/
           Copy-Item README.md artifact/
-          Compress-Archive -Path CMakeLists.txt,README.md,src,.github -DestinationPath artifact/ThanLongNpcDialogProbe_v0.1.1_Source.zip -Force
+          Compress-Archive -Path CMakeLists.txt,README.md,src,.github -DestinationPath artifact/ThanLongNpcDialogProbe_v0.1.2_Source.zip -Force
           Get-FileHash artifact/ThanLongNpcDialogProbe.exe -Algorithm SHA256
           Get-FileHash artifact/ThanLongNpcDialogProbeBridge.dll -Algorithm SHA256
 
       - name: Upload EXE + DLL + source
         uses: actions/upload-artifact@v4
         with:
-          name: ThanLongNpcDialogProbe-v0.1.1-win64
+          name: ThanLongNpcDialogProbe-v0.1.2-win64
           path: artifact/*
           if-no-files-found: error
