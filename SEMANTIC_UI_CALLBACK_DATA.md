@@ -421,7 +421,7 @@ Ví dụ Xa Truyền destination hiện đã đạt:
 GameDialog structure = RUNTIME_OBSERVED
 Text/Tag mapping = RUNTIME_OBSERVED nhiều lần
 UIButton callback destination = RUNTIME_CONFIRMED
-MessageBox confirm = đang được đưa vào chu trình v0.1.6
+MessageBox confirm = đang được đưa vào chu trình v0.1.7
 ```
 
 ## 12. Các lỗi cần tránh
@@ -458,3 +458,8 @@ Fresh Snapshot + Verification
 ```
 
 Đây là hướng ổn định hơn click tọa độ vì identity là **vai trò của UI**, không phải vị trí pixel.
+
+
+## Runtime correction v0.1.7 — không hardcode tên container xác nhận
+
+Runtime test v0.1.6 chứng minh callback lựa chọn map PASS nhưng resolver `MessageBox` có thể không thấy popup xác nhận. Quy tắc mới: tên top-level UI chỉ là tín hiệu phụ. Trước action A phải lưu tập UI ACTIVE; sau action A quét lại và ưu tiên control mới ACTIVE theo semantic `Text/descendant Text + Interactable + HandleClickEvent`, đồng thời loại negative actions. `MessageBox/Dialog/Notice/...` chỉ cộng điểm ngữ cảnh, không còn là điều kiện bắt buộc. Nếu không có candidate duy nhất thì fail-closed và dump UI delta.

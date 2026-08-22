@@ -1,4 +1,4 @@
-# Thần Long NPC / GameDialog Probe v0.1.6
+# Thần Long NPC / GameDialog Probe v0.1.7
 
 Bản test chu trình semantic callback có kiểm soát cho **Xa Truyền Công / Xa Truyền Bình / Xa Truyền Chí / Xa Truyền Tín**.
 
@@ -19,7 +19,7 @@ GameDialog Xa Truyền dùng các `UIButton` có `Tag/selectionID` ổn định:
 
 Tên instance `Button_-xxxxx` là động và **không được dùng làm identity**.
 
-## Mới trong v0.1.6
+## Mới trong v0.1.7
 
 Mục **6 — TEST CHU TRÌNH Xa Truyền** chạy:
 
@@ -73,3 +73,12 @@ Xem `SEMANTIC_UI_CALLBACK_DATA.md` để tái sử dụng cơ chế cho các NPC
 - `ThanLongNpcDialogProbeBridge.dll`
 
 Log: `NpcDialogProbe_output.txt`.
+
+
+## v0.1.7 — Confirm resolver theo UI delta
+
+- Không còn bắt buộc popup xác nhận phải có container tên `MessageBox`.
+- Trước callback điểm đến, Bridge lưu tập UI đang ACTIVE làm baseline.
+- Sau callback, resolver ưu tiên control mới ACTIVE, đọc `Text` trực tiếp hoặc text cây con, kiểm tra `Interactable`, loại semantic âm (`Hủy/Không/Đóng/...`) và chỉ gọi đúng một control positive.
+- Matcher chấp nhận cả nhãn chứa `Xác nhận`, `Đồng ý`, `Chấp nhận`, `Confirm`, không chỉ khớp tuyệt đối.
+- Nếu không tìm thấy, log tự dump tối đa 100 control mới để khóa chính xác popup runtime.
