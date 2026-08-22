@@ -41,3 +41,5 @@ Luôn để cùng thư mục:
 - `ThanLongNpcDialogProbeBridge.dll`
 
 Build: Windows x64 / MSVC / Release.
+
+Build verification branch marker: `probe-build-verify`.

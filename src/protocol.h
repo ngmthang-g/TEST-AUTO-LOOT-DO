@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <cstdint>
 #include <cstddef>
+#include <cwchar>
 
 namespace thanlong_probe {
 
@@ -53,7 +54,7 @@ struct SharedBlock {
 
 inline void MappingName(DWORD pid, wchar_t* out, std::size_t cap) {
     if (!out || cap == 0) return;
-    _snwprintf_s(out, cap, _TRUNCATE, L"%s%lu", kMappingPrefix, static_cast<unsigned long>(pid));
+    swprintf_s(out, cap, L"%s%lu", kMappingPrefix, static_cast<unsigned long>(pid));
 }
 
 } // namespace thanlong_probe
