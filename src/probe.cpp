@@ -98,6 +98,8 @@ const wchar_t* ResultText(ResultCode r) {
         case ResultCode::EnumerationFailed: return L"ENUMERATION_FAILED";
         case ResultCode::GameDialogNotOpen: return L"TRAVEL_UI_NOT_FOUND";
         case ResultCode::FieldReadFailed: return L"FIELD_READ_FAILED";
+        case ResultCode::SafetyRejected: return L"SAFETY_REJECTED";
+        case ResultCode::SelectionNotFound: return L"SELECTION_NOT_FOUND";
         default: return L"ERROR";
     }
 }
@@ -108,6 +110,7 @@ const wchar_t* CommandText(Command c) {
         case Command::DumpNearbyObjects: return L"DUMP_NEARBY";
         case Command::DumpGameDialog: return L"DUMP_GAMEDIALOG";
         case Command::ReadPlayerState: return L"PLAYER";
+        case Command::ClickTravelSelection: return L"CALLBACK_TRAVEL";
         default: return L"UNKNOWN";
     }
 }
@@ -180,7 +183,7 @@ public:
         return true;
     }
 
-    bool Send(Command command, DWORD timeout = 7000, bool print = true) {
+    bool Send(Command command, DWORD timeout = 7000, bool print = true, std::int64_t arg0 = 0) {
         if (!shared_ || !hook_) return false;
         if (shared_->bridgeBusy) {
             if (print) std::wcerr << L"Bridge busy\n";
@@ -188,6 +191,8 @@ public:
         }
 
         shared_->command = command;
+        shared_->arg0 = arg0;
+        shared_->arg1 = 0;
         shared_->result = ResultCode::NotReady;
         shared_->detail[0] = 0;
         LONG seq = shared_->requestSeq + 1;
@@ -337,15 +342,49 @@ std::wstring BuildUiDelta(const std::wstring& baseline,
     return out.str();
 }
 
+const wchar_t* TravelChoiceText(int choice, std::int64_t& selectionId) {
+    selectionId = 0;
+    switch (choice) {
+        case 1: selectionId = 200001; return L"Đại Lý";
+        case 2: selectionId = 200002; return L"Lạc Dương";
+        case 3: selectionId = 200003; return L"Tô Châu";
+        case 4: selectionId = 200004; return L"Nam Hải";
+        case 5: selectionId = 200005; return L"Thảo Nguyên";
+        case 6: selectionId = 200006; return L"Hoàng Long Phủ";
+        case 7: selectionId = 200007; return L"Miêu Cương";
+        case 8: selectionId = 200008; return L"Thạch Lâm";
+        case 9: selectionId = 200009; return L"Võ Di";
+        case 10: selectionId = 9999; return L"Ta chỉ đi ngang qua (đóng dialog)";
+        default: return nullptr;
+    }
+}
+
+void PrintTravelCallbackMenu() {
+    std::wcout
+        << L"\n=== TEST CALLBACK XA TRUYỀN — PHẢI TỰ MỞ GAMEDIALOG TRƯỚC ===\n"
+        << L" 1. Đại Lý          [200001]\n"
+        << L" 2. Lạc Dương       [200002]\n"
+        << L" 3. Tô Châu         [200003]\n"
+        << L" 4. Nam Hải         [200004]\n"
+        << L" 5. Thảo Nguyên     [200005]\n"
+        << L" 6. Hoàng Long Phủ  [200006]\n"
+        << L" 7. Miêu Cương      [200007]\n"
+        << L" 8. Thạch Lâm       [200008]\n"
+        << L" 9. Võ Di            [200009]\n"
+        << L"10. Ta chỉ đi ngang qua / đóng [9999]\n"
+        << L" 0. Hủy\n> ";
+}
+
 void Menu() {
     std::wcout
-        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.4 ==========\n"
-        << L"CHỈ ĐỌC: không ClickNPC, TryClick, SendInput, AutoPath, gửi selection.\n"
+        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.5 ==========\n"
+        << L"Mục 1-5 chỉ đọc. Mục 6 là callback TEST có kiểm soát và SẼ tác động game.\n"
         << L"1. Đọc RoleID / MapID / Pos\n"
         << L"2. DUMP NPC/object live quanh đây\n"
         << L"3. DUMP UI LIVE (Text + Tag + parent path)\n"
         << L"4. CHỜ bảng Xa Truyền 15 giây — rồi tự click NPC\n"
         << L"5. DUMP cả Nearby + UI live\n"
+        << L"6. TEST CALLBACK UIButton.HandleClickEvent() của Xa Truyền\n"
         << L"0. Thoát\n> ";
 }
 
@@ -364,7 +403,8 @@ int wmain() {
     EnableNativeUnicodeConsole();
 
     std::wcout
-        << L"Thần Long NPC / GameDialog Probe v0.1.4 — READ ONLY\n"
+        << L"Thần Long NPC / GameDialog Probe v0.1.5 — CONTROLLED CALLBACK TEST\n"
+        << L"Mục 1-5 read-only; mục 6 mới có quyền gọi callback Xa Truyền.\n"
         << L"Output: NpcDialogProbe_output.txt\n\n";
 
     auto games = Clients();
@@ -483,6 +523,40 @@ int wmain() {
         } else if (choice == 5) {
             session.Send(Command::DumpNearbyObjects);
             session.Send(Command::DumpGameDialog);
+        } else if (choice == 6) {
+            PrintTravelCallbackMenu();
+            std::getline(std::wcin, line);
+            int travelChoice = -1;
+            try { travelChoice = std::stoi(line); } catch (...) { travelChoice = -1; }
+            if (travelChoice == 0) {
+                std::wcout << L"Đã hủy callback.\n";
+                continue;
+            }
+
+            std::int64_t selectionId = 0;
+            const wchar_t* destination = TravelChoiceText(travelChoice, selectionId);
+            if (!destination) {
+                std::wcout << L"Lựa chọn không hợp lệ. Không gửi callback.\n";
+                continue;
+            }
+
+            std::wcout
+                << L"Sắp gọi trực tiếp UIButton.HandleClickEvent() cho: " << destination
+                << L" • selectionID=" << selectionId << L"\n"
+                << L"Tool chỉ cho chạy nếu đang có GameDialog ACTIVE của Xa Truyền và button khớp cả Text + Tag.\n"
+                << L"Gõ GO để xác nhận, ký tự khác để hủy: ";
+            std::getline(std::wcin, line);
+            if (line != L"GO" && line != L"go") {
+                std::wcout << L"Đã hủy callback.\n";
+                continue;
+            }
+
+            if (session.Send(Command::ClickTravelSelection, 7000, true, selectionId) &&
+                session.Last() == ResultCode::Ok) {
+                std::wcout << L"Callback đã được invoke. Chờ 2.5 giây rồi đọc trạng thái nhân vật...\n";
+                Sleep(2500);
+                session.Send(Command::ReadPlayerState, 7000, true);
+            }
         }
     }
 

@@ -7,7 +7,7 @@
 namespace thanlong_probe {
 
 constexpr std::uint32_t kMagic = 0x504E544C;
-constexpr std::uint32_t kProtocolVersion = 0x00010003;
+constexpr std::uint32_t kProtocolVersion = 0x00010004;
 constexpr UINT kWakeMessage = WM_APP + 0x4D1;
 constexpr wchar_t kMappingPrefix[] = L"Local\\ThanLongNpcDialogProbe_";
 constexpr std::size_t kDetailChars = 32768;
@@ -18,6 +18,7 @@ enum class Command : std::uint32_t {
     DumpNearbyObjects = 2,
     DumpGameDialog = 3,
     ReadPlayerState = 4,
+    ClickTravelSelection = 5,
 };
 
 enum class ResultCode : std::int32_t {
@@ -35,6 +36,8 @@ enum class ResultCode : std::int32_t {
     GameDialogNotOpen = 11,
     FieldReadFailed = 12,
     InternalError = 13,
+    SafetyRejected = 14,
+    SelectionNotFound = 15,
 };
 
 struct SharedBlock {
@@ -47,6 +50,8 @@ struct SharedBlock {
     volatile LONG bridgeBusy = 0;
     Command command = Command::None;
     ResultCode result = ResultCode::NotReady;
+    std::int64_t arg0 = 0;
+    std::int64_t arg1 = 0;
     std::int64_t out0 = 0;
     std::int64_t out1 = 0;
     wchar_t detail[kDetailChars]{};
