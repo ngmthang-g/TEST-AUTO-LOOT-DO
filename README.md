@@ -1,4 +1,4 @@
-# Thần Long NPC / GameDialog Probe v0.1.7
+# Thần Long NPC / GameDialog Probe v0.1.8
 
 Bản test chu trình semantic callback có kiểm soát cho **Xa Truyền Công / Xa Truyền Bình / Xa Truyền Chí / Xa Truyền Tín**.
 
@@ -19,7 +19,7 @@ GameDialog Xa Truyền dùng các `UIButton` có `Tag/selectionID` ổn định:
 
 Tên instance `Button_-xxxxx` là động và **không được dùng làm identity**.
 
-## Mới trong v0.1.7
+## Mới trong v0.1.8
 
 Mục **6 — TEST CHU TRÌNH Xa Truyền** chạy:
 
@@ -36,7 +36,7 @@ Mục **6 — TEST CHU TRÌNH Xa Truyền** chạy:
 
 ### Guard Xác nhận
 
-Sau callback destination, controller tạo request mới sau mỗi 200 ms để UI thread có thời gian sinh popup. Bridge chỉ xét `UIButton` ACTIVE + interactable có parent path chứa `MessageBox`, loại nhãn âm như Hủy/Không/Đóng và chỉ nhận nhãn dương như `Xác nhận`, `Đồng ý`, `OK`, `Có`. Nếu có nhiều candidate đồng hạng thì fail-closed.
+Sau callback destination, controller tạo request mới sau mỗi 500 ms để UI thread có thời gian sinh popup. Bridge chỉ xét `UIButton` ACTIVE + interactable có parent path chứa `MessageBox`, loại nhãn âm như Hủy/Không/Đóng và chỉ nhận nhãn dương như `Xác nhận`, `Đồng ý`, `OK`, `Có`. Nếu có nhiều candidate đồng hạng thì fail-closed.
 
 Không block game UI thread bằng Sleep trong Bridge; toàn bộ chờ/poll nằm ở controller và mỗi callback là một request game-thread riêng.
 
@@ -75,10 +75,17 @@ Xem `SEMANTIC_UI_CALLBACK_DATA.md` để tái sử dụng cơ chế cho các NPC
 Log: `NpcDialogProbe_output.txt`.
 
 
-## v0.1.7 — Confirm resolver theo UI delta
+## v0.1.8 — Confirm resolver theo UI delta
 
 - Không còn bắt buộc popup xác nhận phải có container tên `MessageBox`.
 - Trước callback điểm đến, Bridge lưu tập UI đang ACTIVE làm baseline.
 - Sau callback, resolver ưu tiên control mới ACTIVE, đọc `Text` trực tiếp hoặc text cây con, kiểm tra `Interactable`, loại semantic âm (`Hủy/Không/Đóng/...`) và chỉ gọi đúng một control positive.
 - Matcher chấp nhận cả nhãn chứa `Xác nhận`, `Đồng ý`, `Chấp nhận`, `Confirm`, không chỉ khớp tuyệt đối.
 - Nếu không tìm thấy, log tự dump tối đa 100 control mới để khóa chính xác popup runtime.
+
+## v0.1.8 — nhịp Confirm 500 ms
+
+- Sau callback điểm đến, controller chờ 500 ms trước lần dò/callback Xác nhận đầu tiên.
+- Các lần retry Confirm cũng cách nhau 500 ms.
+- Tối đa 40 lần, tương đương khoảng 20 giây thay vì 8 giây.
+- Bridge/game UI thread vẫn không bị Sleep; delay chỉ nằm ở controller.
