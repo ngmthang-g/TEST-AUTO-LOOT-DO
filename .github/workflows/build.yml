@@ -8,45 +8,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Materialize v0.1.9 patch script
-        shell: pwsh
-        run: |
-          $b64 = Get-Content scripts/apply_v019.py.gz.b64 -Raw
-          [IO.File]::WriteAllBytes('scripts/apply_v019.py.gz', [Convert]::FromBase64String($b64))
-          python -c "import gzip, pathlib; pathlib.Path('scripts/apply_v019.py').write_bytes(gzip.decompress(pathlib.Path('scripts/apply_v019.py.gz').read_bytes()))"
-
-      - name: Apply v0.1.9 source patch
-        shell: pwsh
-        run: |
-          python scripts/apply_v019.py
-          Remove-Item scripts/apply_v019.py -Force
-          Remove-Item scripts/apply_v019.py.gz -Force
-          Remove-Item scripts/apply_v019.py.gz.b64 -Force
-
-      - name: Commit normalized v0.1.9 source back to test branch
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/fix-probe-v0.1.9') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix-probe-v0.1.9')
-        shell: pwsh
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin fix-probe-v0.1.9
-          git checkout origin/fix-probe-v0.1.9 -- .github/workflows/build.yml
-          git add -A
-          git diff --cached --quiet
-          if ($LASTEXITCODE -ne 0) {
-            git commit -m "Normalize source for probe v0.1.9"
-            git push origin HEAD:fix-probe-v0.1.9
-          }
 
       - name: Configure x64 Release
         run: cmake -S . -B build -A x64
