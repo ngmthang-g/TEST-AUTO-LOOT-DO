@@ -101,6 +101,8 @@ const wchar_t* ResultText(ResultCode r) {
         case ResultCode::SafetyRejected: return L"SAFETY_REJECTED";
         case ResultCode::SelectionNotFound: return L"SELECTION_NOT_FOUND";
         case ResultCode::ConfirmNotFound: return L"CONFIRM_NOT_FOUND";
+        case ResultCode::NearestNpcNotFound: return L"NEAREST_NPC_NOT_FOUND";
+        case ResultCode::NpcResIdNotFound: return L"NPC_RESID_NOT_FOUND";
         default: return L"ERROR";
     }
 }
@@ -113,6 +115,8 @@ const wchar_t* CommandText(Command c) {
         case Command::ReadPlayerState: return L"PLAYER";
         case Command::ClickTravelSelection: return L"CALLBACK_TRAVEL";
         case Command::ClickMessageBoxConfirm: return L"CALLBACK_CONFIRM";
+        case Command::ProbeNearestNpc: return L"PROBE_NEAREST_NPC";
+        case Command::ScanNpcResIdBatch: return L"SCAN_NPC_RESID";
         default: return L"UNKNOWN";
     }
 }
@@ -185,7 +189,7 @@ public:
         return true;
     }
 
-    bool Send(Command command, DWORD timeout = 7000, bool print = true, std::int64_t arg0 = 0) {
+    bool Send(Command command, DWORD timeout = 7000, bool print = true, std::int64_t arg0 = 0, std::int64_t arg1 = 0) {
         if (!shared_ || !hook_) return false;
         if (shared_->bridgeBusy) {
             if (print) std::wcerr << L"Bridge busy\n";
@@ -194,7 +198,7 @@ public:
 
         shared_->command = command;
         shared_->arg0 = arg0;
-        shared_->arg1 = 0;
+        shared_->arg1 = arg1;
         shared_->result = ResultCode::NotReady;
         shared_->detail[0] = 0;
         LONG seq = shared_->requestSeq + 1;
@@ -399,14 +403,15 @@ void PrintTravelCallbackMenu() {
 
 void Menu() {
     std::wcout
-        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.8 ==========\n"
-        << L"Mục 1-5 chỉ đọc. Mục 6 chạy chu trình callback Xa Truyền → UI Xác nhận semantic và SẼ tác động game.\n"
+        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.9 ==========\n"
+        << L"Mục 1-5 và 7 chỉ đọc. Mục 6 chạy chu trình callback Xa Truyền → UI Xác nhận semantic và SẼ tác động game.\n"
         << L"1. Đọc RoleID / MapID / Pos\n"
         << L"2. DUMP NPC/object live quanh đây\n"
         << L"3. DUMP UI LIVE (Text + Tag + parent path)\n"
         << L"4. CHỜ bảng Xa Truyền 15 giây — rồi tự click NPC\n"
         << L"5. DUMP cả Nearby + UI live\n"
         << L"6. TEST CHU TRÌNH Xa Truyền: chọn map → Xác nhận\n"
+        << L"7. FIND npcResID NPC GẦN NHẤT (READ ONLY)\n"
         << L"0. Thoát\n> ";
 }
 
@@ -425,8 +430,8 @@ int wmain() {
     EnableNativeUnicodeConsole();
 
     std::wcout
-        << L"Thần Long NPC / GameDialog Probe v0.1.8 — FULL TRAVEL CALLBACK TEST\n"
-        << L"Mục 1-5 read-only; mục 6 callback lựa chọn Xa Truyền rồi resolve/callback UI Xác nhận semantic.\n"
+        << L"Thần Long NPC / GameDialog Probe v0.1.9 — TRAVEL + NPC RESID PROBE\n"
+        << L"Mục 1-5 và 7 read-only; mục 6 callback lựa chọn Xa Truyền rồi resolve/callback UI Xác nhận semantic.\n"
         << L"Output: NpcDialogProbe_output.txt\n\n";
 
     auto games = Clients();
@@ -604,7 +609,7 @@ int wmain() {
 
             if (!confirmed) {
                 Log(Command::ClickMessageBoxConfirm, session.Last(), session.Text());
-                std::wcout << L"Không callback được Xác nhận trong 20 giây. Resolver v0.1.8 đã dump UI mới bên dưới:\n"
+                std::wcout << L"Không callback được Xác nhận trong 20 giây. Resolver v0.1.9 đã dump UI mới bên dưới:\n"
                            << session.Text() << L"\n[Đã ghi NpcDialogProbe_output.txt]\n";
                 continue;
             }
@@ -630,6 +635,52 @@ int wmain() {
                 std::wcout << L"Đã callback Xác nhận nhưng chưa thấy MapID đổi trong 15 giây. Đọc trạng thái hiện tại:\n";
                 session.Send(Command::ReadPlayerState, 7000, true);
             }
+        } else if (choice == 7) {
+            std::wcout
+                << L"\n=== FIND npcResID NPC GẦN NHẤT — READ ONLY ===\n"
+                << L"Đứng sát đúng NPC cần dò (ví dụ Xa Truyền Công/Bình), tránh đứng sát NPC khác.\n"
+                << L"Bước 1: đọc object NPC gần nhất + các field ID/ResID/TemplateID khả nghi...\n";
+
+            if (!(session.Send(Command::ProbeNearestNpc, 7000, true) && session.Last() == ResultCode::Ok)) {
+                std::wcout << L"Không lấy được NPC gần nhất. Hãy đứng sát NPC rồi thử lại mục 7.\n";
+                continue;
+            }
+
+            std::wcout
+                << L"Bước 2: đối chiếu NPC_ID tĩnh 1..1003 bằng Game.GetNPCPosition().\n"
+                << L"Tool chia 11 batch để trả quyền cho game giữa các lần quét; không ClickNPC, không di chuyển.\n";
+
+            bool anyClose = false;
+            int completed = 0;
+            for (int start = 1; start <= 1003; start += 100) {
+                const int end = std::min(start + 99, 1003);
+                if (!session.Send(Command::ScanNpcResIdBatch, 10000, false, start, end)) {
+                    std::wcout << L"  batch " << start << L"-" << end << L": TIMEOUT/FAIL\n";
+                    Sleep(100);
+                    continue;
+                }
+                ++completed;
+                Log(Command::ScanNpcResIdBatch, session.Last(), session.Text());
+                const bool close = session.Text().find(L"CLOSE_HIT") != std::wstring::npos ||
+                                   session.Text().find(L"EXACT_HIT") != std::wstring::npos;
+                if (close) {
+                    anyClose = true;
+                    std::wcout << L"\n[CANDIDATE TÌM THẤY batch " << start << L"-" << end << L"]\n"
+                               << session.Text() << L"\n";
+                } else {
+                    std::wcout << L"  batch " << start << L"-" << end << L": xong\n";
+                }
+                Sleep(100);
+            }
+
+            std::wcout << L"\nĐã quét " << completed << L"/11 batch. ";
+            if (anyClose) {
+                std::wcout << L"Có candidate vị trí trùng/gần NPC live. Xem các dòng EXACT_HIT/CLOSE_HIT ở trên hoặc trong log.\n";
+            } else {
+                std::wcout << L"Chưa có candidate vị trí đủ gần trong NPC_ID 1..1003.\n"
+                              L"Nếu Name đúng Xa Truyền nhưng không có hit, đây là dấu hiệu mạnh NPC có thể là server/runtime spawn không nằm trong static Config.\n";
+            }
+            std::wcout << L"Toàn bộ chi tiết đã ghi NpcDialogProbe_output.txt.\n";
         }
     }
 

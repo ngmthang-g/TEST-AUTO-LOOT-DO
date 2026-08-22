@@ -2,49 +2,19 @@ name: Build NPC GameDialog Probe
 
 on:
   push:
-    branches: [ main, fix-probe-v0.1.8 ]
+    branches: [ main, fix-probe-v0.1.9 ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Checkout PR head for source normalization
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix-probe-v0.1.8'
-        shell: pwsh
-        run: |
-          git fetch origin fix-probe-v0.1.8
-          git checkout -B fix-probe-v0.1.8 origin/fix-probe-v0.1.8
-
-      - name: Apply v0.1.8 source patch
-        shell: pwsh
-        run: |
-          if (Test-Path scripts/apply_v018.py) {
-            python scripts/apply_v018.py
-            Remove-Item scripts/apply_v018.py -Force
-          }
-
-      - name: Commit normalized v0.1.8 source back to test branch
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/fix-probe-v0.1.8') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix-probe-v0.1.8')
-        shell: pwsh
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet
-          if ($LASTEXITCODE -ne 0) {
-            git commit -m "Normalize source for probe v0.1.8"
-            git push origin HEAD:fix-probe-v0.1.8
-          }
 
       - name: Configure x64 Release
         run: cmake -S . -B build -A x64
@@ -60,13 +30,13 @@ jobs:
           Copy-Item build/Release/ThanLongNpcDialogProbeBridge.dll artifact/
           Copy-Item README.md artifact/
           Copy-Item SEMANTIC_UI_CALLBACK_DATA.md artifact/
-          Compress-Archive -Path CMakeLists.txt,README.md,SEMANTIC_UI_CALLBACK_DATA.md,src,.github -DestinationPath artifact/ThanLongNpcDialogProbe_v0.1.8_Source.zip -Force
+          Compress-Archive -Path CMakeLists.txt,README.md,SEMANTIC_UI_CALLBACK_DATA.md,src,.github -DestinationPath artifact/ThanLongNpcDialogProbe_v0.1.9_Source.zip -Force
           Get-FileHash artifact/ThanLongNpcDialogProbe.exe -Algorithm SHA256
           Get-FileHash artifact/ThanLongNpcDialogProbeBridge.dll -Algorithm SHA256
 
       - name: Upload EXE + DLL + source
         uses: actions/upload-artifact@v4
         with:
-          name: ThanLongNpcDialogProbe-v0.1.8-win64
+          name: ThanLongNpcDialogProbe-v0.1.9-win64
           path: artifact/*
           if-no-files-found: error
