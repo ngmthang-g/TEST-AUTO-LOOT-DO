@@ -1,0 +1,35 @@
+#include "protocol.h"
+
+#include <windows.h>
+#include <tlhelp32.h>
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+
+using namespace thanlong_probe;
+
+namespace {
+struct GameClient { DWORD pid=0,tid=0; HWND hwnd=nullptr; std::wstring title; };
+
+std::filesystem::path ExeDir(){std::wstring b(32768,L'\0');DWORD n=GetModuleFileNameW(nullptr,b.data(),static_cast<DWORD>(b.size()));b.resize(n);return std::filesystem::path(b).parent_path();}
+bool HasModule(DWORD pid,const wchar_t* name){HANDLE s=CreateToolhelp32Snapshot(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32,pid);if(s==INVALID_HANDLE_VALUE)return false;MODULEENTRY32W e{};e.dwSize=sizeof(e);bool f=false;if(Module32FirstW(s,&e))do{if(!_wcsicmp(e.szModule,name)){f=true;break;}}while(Module32NextW(s,&e));CloseHandle(s);return f;}
+BOOL CALLBACK EnumProc(HWND w,LPARAM p){if(!IsWindowVisible(w)||GetWindowTextLengthW(w)<=0)return TRUE;DWORD pid=0;DWORD tid=GetWindowThreadProcessId(w,&pid);if(!pid||!tid||!HasModule(pid,L"GameAssembly.dll"))return TRUE;auto* out=reinterpret_cast<std::vector<GameClient>*>(p);for(auto& g:*out)if(g.pid==pid)return TRUE;wchar_t t[512]{};GetWindowTextW(w,t,_countof(t));out->push_back({pid,tid,w,t});return TRUE;}
+std::vector<GameClient> Clients(){std::vector<GameClient> o;EnumWindows(EnumProc,reinterpret_cast<LPARAM>(&o));std::sort(o.begin(),o.end(),[](auto&a,auto&b){return a.pid<b.pid;});return o;}
+std::string Utf8(const std::wstring&s){if(s.empty())return{};int n=WideCharToMultiByte(CP_UTF8,0,s.c_str(),static_cast<int>(s.size()),nullptr,0,nullptr,nullptr);std::string o(static_cast<std::size_t>(n),'\0');if(n>0)WideCharToMultiByte(CP_UTF8,0,s.c_str(),static_cast<int>(s.size()),o.data(),n,nullptr,nullptr);return o;}
+const wchar_t* R(ResultCode r){switch(r){case ResultCode::Ok:return L"OK";case ResultCode::WrongThread:return L"WRONG_THREAD";case ResultCode::GameAssemblyMissing:return L"GAMEASSEMBLY_MISSING";case ResultCode::Il2CppExportMissing:return L"IL2CPP_EXPORT_MISSING";case ResultCode::ClassNotFound:return L"CLASS_NOT_FOUND";case ResultCode::MethodNotFound:return L"METHOD_NOT_FOUND";case ResultCode::InvokeException:return L"INVOKE_EXCEPTION";case ResultCode::NullResult:return L"NULL_RESULT";case ResultCode::EnumerationFailed:return L"ENUMERATION_FAILED";case ResultCode::GameDialogNotOpen:return L"GAMEDIALOG_NOT_OPEN";case ResultCode::FieldReadFailed:return L"FIELD_READ_FAILED";default:return L"ERROR";}}
+const wchar_t* C(Command c){switch(c){case Command::ValidateContext:return L"VALIDATE";case Command::DumpNearbyObjects:return L"DUMP_NEARBY";case Command::DumpGameDialog:return L"DUMP_GAMEDIALOG";case Command::ReadPlayerState:return L"PLAYER";default:return L"UNKNOWN";}}
+void Log(Command c,ResultCode r,const std::wstring&d){SYSTEMTIME st{};GetLocalTime(&st);wchar_t h[256]{};_snwprintf_s(h,_countof(h),_TRUNCATE,L"\r\n[%04u-%02u-%02u %02u:%02u:%02u] %s => %s\r\n",st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,C(c),R(r));std::ofstream f(ExeDir()/L"NpcDialogProbe_output.txt",std::ios::binary|std::ios::app);if(f)f<<Utf8(h)<<Utf8(d)<<"\r\n";}
+
+class Session{
+public:~Session(){Close();}bool Open(const GameClient&g,std::wstring&e){game=g;wchar_t n[96]{};MappingName(g.pid,n,_countof(n));map=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,static_cast<DWORD>(sizeof(SharedBlock)),n);if(!map){e=L"CreateFileMapping fail";return false;}sh=reinterpret_cast<SharedBlock*>(MapViewOfFile(map,FILE_MAP_ALL_ACCESS,0,0,sizeof(SharedBlock)));if(!sh){e=L"MapViewOfFile fail";return false;}*sh=SharedBlock{};sh->targetPid=g.pid;sh->targetTid=g.tid;auto dll=ExeDir()/L"ThanLongNpcDialogProbeBridge.dll";mod=LoadLibraryW(dll.c_str());if(!mod){e=L"Thiếu/load DLL fail Win32="+std::to_wstring(GetLastError());return false;}auto p=reinterpret_cast<HOOKPROC>(GetProcAddress(mod,"TlnpGetMessageHook"));if(!p){e=L"DLL thiếu TlnpGetMessageHook";return false;}hook=SetWindowsHookExW(WH_GETMESSAGE,p,mod,g.tid);if(!hook){e=L"SetWindowsHookEx fail Win32="+std::to_wstring(GetLastError())+L" • chạy tool cùng quyền với game";return false;}PostThreadMessageW(g.tid,kWakeMessage,0,0);return true;}
+    bool Send(Command c,DWORD timeout=7000,bool print=true){if(!sh||!hook)return false;if(sh->bridgeBusy){if(print)std::wcerr<<L"Bridge busy\n";return false;}sh->command=c;sh->result=ResultCode::NotReady;sh->detail[0]=0;LONG seq=sh->requestSeq+1;MemoryBarrier();InterlockedExchange(&sh->requestSeq,seq);if(!PostThreadMessageW(game.tid,kWakeMessage,0,0))return false;ULONGLONG end=GetTickCount64()+timeout;while(GetTickCount64()<end){if(sh->completedSeq==seq){MemoryBarrier();last=sh->result;text=sh->detail;Log(c,last,text);if(print)std::wcout<<L"\n["<<R(last)<<L"]\n"<<text<<L"\n[Đã ghi NpcDialogProbe_output.txt]\n";return true;}Sleep(10);}if(print)std::wcerr<<L"TIMEOUT\n";return false;}
+    ResultCode Last()const{return last;}const std::wstring&Text()const{return text;}void Close(){if(hook)UnhookWindowsHookEx(hook);if(mod)FreeLibrary(mod);if(sh)UnmapViewOfFile(sh);if(map)CloseHandle(map);hook=nullptr;mod=nullptr;sh=nullptr;map=nullptr;}
+private:GameClient game{};HANDLE map=nullptr;SharedBlock*sh=nullptr;HMODULE mod=nullptr;HHOOK hook=nullptr;ResultCode last=ResultCode::NotReady;std::wstring text;};
+
+void Menu(){std::wcout<<L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1 ==========\nCHỈ ĐỌC: không ClickNPC, TryClick, SendInput, AutoPath, gửi selection.\n1. Đọc RoleID / MapID / Pos\n2. DUMP NPC/object live quanh đây\n3. DUMP GameDialog đang mở (Text + Tag/selectionID)\n4. CHỜ GameDialog 15 giây — chọn rồi quay sang game tự click NPC\n5. DUMP cả Nearby + GameDialog\n0. Thoát\n> ";}
+}
+
+int wmain(){SetConsoleOutputCP(CP_UTF8);SetConsoleCP(CP_UTF8);std::wcout<<L"Thần Long NPC / GameDialog Probe v0.1 — READ ONLY\nOutput: NpcDialogProbe_output.txt\n\n";auto gs=Clients();if(gs.empty()){std::wcerr<<L"Không tìm thấy client có GameAssembly.dll\n";return 2;}for(std::size_t i=0;i<gs.size();i++)std::wcout<<L"  "<<i+1<<L". "<<gs[i].title<<L" • PID "<<gs[i].pid<<L"\n";std::wcout<<L"Chọn client: ";std::wstring l;std::getline(std::wcin,l);std::size_t idx=0;try{idx=std::stoul(l);}catch(...){return 3;}if(idx<1||idx>gs.size())return 3;Session s;std::wstring e;if(!s.Open(gs[idx-1],e)){std::wcerr<<L"Attach fail: "<<e<<L"\n";return 4;}s.Send(Command::ValidateContext);for(;;){Menu();std::getline(std::wcin,l);int c=-1;try{c=std::stoi(l);}catch(...){continue;}if(c==0)break;if(c==1)s.Send(Command::ReadPlayerState);else if(c==2)s.Send(Command::DumpNearbyObjects);else if(c==3)s.Send(Command::DumpGameDialog);else if(c==4){std::wcout<<L"Đang chờ. Quay sang game và TỰ CLICK Xa Truyền...\n";bool got=false;for(int i=0;i<30;i++){if(s.Send(Command::DumpGameDialog,5000,false)&&s.Last()==ResultCode::Ok){std::wcout<<L"\n[OK] BẮT ĐƯỢC GAMEDIALOG:\n"<<s.Text()<<L"\n[Đã ghi NpcDialogProbe_output.txt]\n";got=true;break;}Sleep(500);}if(!got)std::wcout<<L"Hết 15 giây chưa bắt được GameDialog.\n";}else if(c==5){s.Send(Command::DumpNearbyObjects);s.Send(Command::DumpGameDialog);}}return 0;}
