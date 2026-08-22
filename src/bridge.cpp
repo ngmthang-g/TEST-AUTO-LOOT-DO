@@ -30,6 +30,7 @@ using FieldInfo = void;
 
 HANDLE gMapping = nullptr;
 SharedBlock* gShared = nullptr;
+std::vector<Il2CppObject*> gTravelUiBaselineActive;
 
 std::wstring W(const char* s) {
     if (!s || !*s) return L"";
@@ -918,6 +919,14 @@ ResultCode ClickTravelSelection(std::int64_t selectionId, std::wstring& detail) 
         return ResultCode::SafetyRejected;
     }
 
+    // Capture the ACTIVE UI set immediately before the destination callback.
+    // The confirmation popup may use any runtime container name, so the next stage
+    // resolves newly-active semantic controls instead of assuming "MessageBox".
+    gTravelUiBaselineActive.clear();
+    for (Il2CppObject* object : objects) {
+        if (object && IsActiveUiObject(object)) gTravelUiBaselineActive.push_back(object);
+    }
+
     Il2CppClass* klass = gApi.object_get_class(target.object);
     const MethodInfo* handleClick = Method(klass, "HandleClickEvent", 0);
     if (!handleClick) {
@@ -973,8 +982,11 @@ std::wstring FoldSemanticLabel(const std::wstring& input) {
 int PositiveConfirmScore(const std::wstring& label) {
     const std::wstring folded = FoldSemanticLabel(label);
     if (folded == L"xacnhan") return 100;
+    if (folded.find(L"xacnhan") != std::wstring::npos) return 98;
     if (folded == L"dongy" || folded == L"chapnhan") return 95;
+    if (folded.find(L"dongy") != std::wstring::npos || folded.find(L"chapnhan") != std::wstring::npos) return 93;
     if (folded == L"confirm") return 90;
+    if (folded.find(L"confirm") != std::wstring::npos) return 88;
     if (folded == L"ok") return 85;
     if (folded == L"co" || folded == L"yes") return 70;
     return 0;
@@ -997,75 +1009,122 @@ ResultCode ClickMessageBoxConfirm(std::wstring& detail) {
         return ResultCode::EnumerationFailed;
     }
 
-    bool messageBoxPresent = false;
-    struct Candidate { UiRow row; int score = 0; };
+    struct Candidate {
+        UiRow row;
+        int score = 0;
+        bool newlyActive = false;
+        bool dialogContext = false;
+    };
     std::vector<Candidate> candidates;
+    std::vector<UiRow> newlyActiveRows;
+    std::size_t activeCount = 0;
+
+    const auto wasActiveBeforeTravel = [](Il2CppObject* object) {
+        return std::find(gTravelUiBaselineActive.begin(), gTravelUiBaselineActive.end(), object) !=
+               gTravelUiBaselineActive.end();
+    };
 
     for (Il2CppObject* object : objects) {
         if (!object || !IsActiveUiObject(object)) continue;
+        ++activeCount;
+
         UiRow row = ReadUiRow(object);
-        if (row.name == L"MessageBox" || row.path.find(L"MessageBox") != std::wstring::npos) {
-            messageBoxPresent = true;
+        const bool newlyActive = !wasActiveBeforeTravel(object);
+        const bool dialogContext = ContainsAny(
+            row.path + L"/" + row.name,
+            {L"MessageBox", L"Dialog", L"Confirm", L"Notice", L"Prompt", L"Tip", L"Warning", L"Alert", L"Ask"});
+
+        if (newlyActive) {
+            const bool useful = row.clickable || !row.text.empty() || !row.tag.empty() ||
+                                ContainsAny(row.name, {L"Button", L"Dialog", L"Box", L"Notice", L"Confirm"});
+            if (useful && newlyActiveRows.size() < 100) newlyActiveRows.push_back(row);
         }
-        if (!row.clickable || row.className.find(L"UIButton") == std::wstring::npos) continue;
-        if (row.path.find(L"MessageBox") == std::wstring::npos) continue;
+
+        if (!row.clickable) continue;
+        Il2CppClass* klass = gApi.object_get_class(row.object);
+        if (!klass || !Method(klass, "HandleClickEvent", 0)) continue;
         if (IsNegativeConfirmLabel(row.text) || IsNegativeConfirmLabel(row.name)) continue;
 
         double interactable = 1.0;
         bool integral = true;
         if (NumberMember(row.object, "Interactable", interactable, integral) && interactable < 0.5) continue;
 
-        const int score = std::max(PositiveConfirmScore(row.text), PositiveConfirmScore(row.name));
-        if (score > 0) candidates.push_back({std::move(row), score});
+        int semanticScore = std::max(PositiveConfirmScore(row.text), PositiveConfirmScore(row.name));
+        if (semanticScore <= 0) continue;
+
+        int score = semanticScore;
+        if (newlyActive) score += 40;
+        if (dialogContext) score += 20;
+        candidates.push_back({std::move(row), score, newlyActive, dialogContext});
     }
 
-    if (!messageBoxPresent) {
-        detail = L"Chưa thấy MessageBox ACTIVE sau callback điểm đến.";
-        return ResultCode::ConfirmNotFound;
-    }
     if (candidates.empty()) {
-        detail = L"MessageBox đã xuất hiện nhưng chưa tìm thấy UIButton xác nhận dương tính (Xác nhận/Đồng ý/OK/Có).";
+        std::wostringstream out;
+        out << L"CONFIRM_NOT_FOUND: chưa thấy control positive có HandleClickEvent sau callback điểm đến."
+            << L"\nBaselineActive=" << gTravelUiBaselineActive.size()
+            << L" currentActive=" << activeCount
+            << L" newlyActiveUseful=" << newlyActiveRows.size()
+            << L"\nKhông còn bắt buộc container tên MessageBox. Dưới đây là UI mới đang ACTIVE:";
+        if (newlyActiveRows.empty()) {
+            out << L"\n(không có control mới hữu ích; popup có thể tái sử dụng object cũ — chọn mục 3 để dump toàn UI)";
+        } else {
+            for (std::size_t i = 0; i < newlyActiveRows.size(); ++i) {
+                out << L"\n";
+                EmitUiRow(out, newlyActiveRows[i], i + 1, L"NEW-CONFIRM");
+            }
+        }
+        detail = out.str();
         return ResultCode::ConfirmNotFound;
     }
 
     int bestScore = 0;
     for (const auto& c : candidates) bestScore = std::max(bestScore, c.score);
-    std::vector<UiRow*> best;
-    for (auto& c : candidates) if (c.score == bestScore) best.push_back(&c.row);
-    if (best.size() != 1 || !best.front() || !best.front()->object) {
+    std::vector<Candidate*> best;
+    for (auto& c : candidates) if (c.score == bestScore) best.push_back(&c);
+
+    if (best.size() != 1 || !best.front() || !best.front()->row.object) {
         std::wostringstream out;
-        out << L"SAFETY REJECT: MessageBox có " << best.size()
-            << L" UIButton cùng điểm nhận diện xác nhận=" << bestScore << L"; không callback mù.";
-        for (const auto* row : best) {
-            if (!row) continue;
-            out << L"\n- text=\"" << row->text << L"\" name=\"" << row->name << L"\" parents=" << row->path;
+        out << L"SAFETY REJECT: có " << best.size()
+            << L" control cùng điểm semantic confirm=" << bestScore << L"; không callback mù.";
+        for (const auto* c : best) {
+            if (!c) continue;
+            out << L"\n- class=" << c->row.className
+                << L" text=\"" << c->row.text << L"\" name=\"" << c->row.name << L"\""
+                << L" new=" << (c->newlyActive ? 1 : 0)
+                << L" dialogContext=" << (c->dialogContext ? 1 : 0)
+                << L" parents=" << c->row.path;
         }
         detail = out.str();
         return ResultCode::SafetyRejected;
     }
 
-    UiRow& target = *best.front();
+    Candidate& chosen = *best.front();
+    UiRow& target = chosen.row;
     Il2CppClass* klass = gApi.object_get_class(target.object);
     const MethodInfo* handleClick = Method(klass, "HandleClickEvent", 0);
     if (!handleClick) {
-        detail = L"UIButton Xác nhận không resolve được HandleClickEvent().";
+        detail = L"Control Xác nhận không resolve được HandleClickEvent().";
         return ResultCode::MethodNotFound;
     }
 
     Il2CppObject* ignored = nullptr;
     if (!Invoke(handleClick, ManagedThis(target.object), nullptr, ignored)) {
-        detail = L"Managed exception khi callback UIButton Xác nhận.";
+        detail = L"Managed exception khi callback control Xác nhận.";
         return ResultCode::InvokeException;
     }
 
     std::wostringstream out;
     out << L"CONFIRM CALLBACK ĐÃ GỌI"
+        << L" • class=" << target.className
         << L" • text=\"" << target.text << L"\""
-        << L" • score=" << bestScore;
+        << L" • score=" << bestScore
+        << L" • newlyActive=" << (chosen.newlyActive ? 1 : 0)
+        << L" • dialogContext=" << (chosen.dialogContext ? 1 : 0);
     if (!target.name.empty()) out << L" • button=" << target.name;
     if (!target.path.empty()) out << L"\nparents=" << target.path;
-    out << L"\nĐã invoke trực tiếp UIButton.HandleClickEvent() của MessageBox; không tọa độ/TryClick/SendInput.";
+    out << L"\nĐã invoke trực tiếp HandleClickEvent() theo UI-delta + semantic label; không tọa độ/TryClick/SendInput.";
     detail = out.str();
+    gTravelUiBaselineActive.clear();
     return ResultCode::Ok;
 }
 
@@ -1107,7 +1166,7 @@ void Process() {
             switch (gShared->command) {
                 case Command::ValidateContext:
                     result = ResultCode::Ok;
-                    detail = L"PASS: đúng window thread. v0.1.6 có chu trình mutation có kiểm soát: callback lựa chọn Xa Truyền rồi callback MessageBox Xác nhận theo semantic UI.";
+                    detail = L"PASS: đúng window thread. v0.1.7 có chu trình mutation có kiểm soát: callback lựa chọn Xa Truyền rồi callback MessageBox Xác nhận theo semantic UI.";
                     break;
                 case Command::DumpNearbyObjects:
                     result = DumpNearby(detail);
