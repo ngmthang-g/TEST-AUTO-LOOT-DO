@@ -1,6 +1,12 @@
-# Thần Long NPC / GameDialog Probe v0.1
+# Thần Long NPC / GameDialog Probe v0.1.1
 
 Probe **chỉ đọc** để chốt runtime của NPC truyền tống như **Xa Truyền Bình / Xa Truyền Công**.
+
+## Sửa trong v0.1.1
+
+- Fix console Windows chỉ hiện `Th` rồi trông như treo.
+- Chuyển stdin/stdout/stderr sang UTF-16 native bằng `_O_U16TEXT` trước khi dùng `std::wcout/std::wcin`.
+- Không thay đổi logic đọc NPC/GameDialog.
 
 ## Probe làm gì
 
@@ -41,5 +47,3 @@ Luôn để cùng thư mục:
 - `ThanLongNpcDialogProbeBridge.dll`
 
 Build: Windows x64 / MSVC / Release.
-
-Build verification branch marker: `probe-build-verify`.
