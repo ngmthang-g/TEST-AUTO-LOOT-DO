@@ -468,3 +468,23 @@ Runtime test v0.1.6 chứng minh callback lựa chọn map PASS nhưng resolver 
 ## Runtime pacing update v0.1.8
 
 Chuỗi Xa Truyền dùng controller-side pacing 500 ms giữa callback destination và semantic confirm scan/callback. Không Sleep trong Bridge/game UI thread. Mục đích là tránh poll quá gấp và cho popup runtime đủ thời gian ổn định.
+
+
+# NPC identity: npcResID/NPC_ID tĩnh vs RoleID runtime (v0.1.9)
+
+Không được trộn các lớp identity:
+
+- `NPC_ID` / `npcResID`: template/config identity dùng cho `Game.GetNPCPosition(npcID)`, `Game.ClickNPC(npcID)`, và helper `GoToNPC(mapID,npcID)`. Mục tiêu cần lưu cho auto.
+- `RoleID`: identity của live NPC/object runtime; có thể phụ thuộc instance/session/AOI và không thay thế mặc định cho npcResID.
+- `UIButton` runtime name kiểu `Button_-xxxxx`: UI instance, có thể đổi mỗi lần dựng dialog; tuyệt đối không dùng làm NPC identity.
+
+Quy trình discovery read-only:
+
+1. đứng sát NPC; `Game.GetNearestNPC()` -> lấy `Name`, `RoleID`, `Position`;
+2. đọc các member `NpcResID/NPCResID/ResID/NpcID/TemplateID/ID/...`;
+3. nếu chưa chốt, thử static `NPC_ID` và gọi `Game.GetNPCPosition(id)`;
+4. so vị trí với live nearest NPC; `distance <= 0.5` là `EXACT_HIT`, `<= 8` là `CLOSE_HIT` cần kiểm tiếp;
+5. với candidate gần, thử read-only `GetNearestNPC(candidateID)` để so Name/RoleID;
+6. chỉ sau khi lặp lại ổn định mới test mutation `Game.ClickNPC(candidateID)` và xác minh dialog Title đúng NPC.
+
+Nếu quét hết static Config mà không có candidate vị trí gần trong khi `GetNearestNPC()` trả đúng Name, coi đó là bằng chứng mạnh NPC có thể là server/runtime-spawn hoặc không nằm trong Config snapshot; khi đó nên mở NPC theo live object/RoleID semantics thay vì tạo NPC_ID giả.

@@ -32,6 +32,15 @@ HANDLE gMapping = nullptr;
 SharedBlock* gShared = nullptr;
 std::vector<Il2CppObject*> gTravelUiBaselineActive;
 
+struct NearestNpcSnapshot {
+    bool valid = false;
+    double x = 0.0;
+    double y = 0.0;
+    std::wstring name;
+    std::int64_t roleId = 0;
+};
+NearestNpcSnapshot gNearestNpcSnapshot;
+
 std::wstring W(const char* s) {
     if (!s || !*s) return L"";
     const int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
@@ -389,6 +398,67 @@ bool InvokeNoArg(Il2CppClass* klass, const char* name, Il2CppObject*& out) {
     return Invoke(method, instance, nullptr, out);
 }
 
+bool InvokeIntArg(Il2CppClass* klass, const char* name, std::int32_t value, Il2CppObject*& out) {
+    out = nullptr;
+    if (!klass) return false;
+    const MethodInfo* method = Method(klass, name, 1);
+    if (!method) return false;
+    void* instance = nullptr;
+    Il2CppObject* singleton = nullptr;
+    if (!IsStatic(method)) {
+        if (!Singleton(klass, singleton)) return false;
+        instance = ManagedThis(singleton);
+    }
+    void* args[] = {&value};
+    return Invoke(method, instance, args, out);
+}
+
+bool ReadPosition(Il2CppObject* object, double& x, double& y) {
+    x = 0.0;
+    y = 0.0;
+    if (!object) return false;
+    bool ix = false, iy = false;
+    bool hasX = NumberMember(object, "PosX", x, ix) ||
+                NumberMember(object, "X", x, ix) ||
+                NumberMember(object, "x", x, ix);
+    bool hasY = NumberMember(object, "PosY", y, iy) ||
+                NumberMember(object, "Y", y, iy) ||
+                NumberMember(object, "y", y, iy);
+    if (hasX && hasY) return true;
+
+    Il2CppObject* position = nullptr;
+    if (!ObjMember(object, "Position", position) || !position) return false;
+    if (!hasX) hasX = NumberMember(position, "PosX", x, ix) ||
+                      NumberMember(position, "X", x, ix) ||
+                      NumberMember(position, "x", x, ix);
+    if (!hasY) hasY = NumberMember(position, "PosY", y, iy) ||
+                      NumberMember(position, "Y", y, iy) ||
+                      NumberMember(position, "y", y, iy);
+    return hasX && hasY;
+}
+
+bool GetNearestNpcObject(std::int32_t npcResId, bool filtered, Il2CppObject*& out) {
+    out = nullptr;
+    Il2CppClass* game = Class("FGStudio.LuaSystem.API", "LuaSystemAPI_Game");
+    Il2CppClass* shared = Class("FGStudio.LuaSystem", "LuaSystemSharedData");
+
+    if (!filtered) {
+        if (game && InvokeNoArg(game, "GetNearestNPC", out)) return true;
+        out = nullptr;
+        if (shared && InvokeNoArg(shared, "GetNearestNPC", out)) return true;
+        out = nullptr;
+        if (game && InvokeIntArg(game, "GetNearestNPC", 0, out)) return true;
+        out = nullptr;
+        if (shared && InvokeIntArg(shared, "GetNearestNPC", 0, out)) return true;
+        return false;
+    }
+
+    if (game && InvokeIntArg(game, "GetNearestNPC", npcResId, out)) return true;
+    out = nullptr;
+    if (shared && InvokeIntArg(shared, "GetNearestNPC", npcResId, out)) return true;
+    return false;
+}
+
 std::wstring ClassName(Il2CppObject* object) {
     Il2CppClass* klass = object ? gApi.object_get_class(object) : nullptr;
     const char* name = klass ? gApi.class_get_name(klass) : nullptr;
@@ -587,6 +657,211 @@ ResultCode DumpNearby(std::wstring& detail) {
     std::size_t index = 0;
     for (const auto& item : items) {
         if (item.second) out << Describe(item.second, item.first, ++index) << L"\n";
+    }
+    detail = out.str();
+    return ResultCode::Ok;
+}
+
+
+ResultCode ProbeNearestNpc(std::wstring& detail) {
+    gNearestNpcSnapshot = NearestNpcSnapshot{};
+
+    Il2CppObject* npc = nullptr;
+    if (!GetNearestNpcObject(0, false, npc)) {
+        detail = L"Không resolve/invoke được Game.GetNearestNPC() / LuaSystemSharedData.GetNearestNPC().";
+        return ResultCode::MethodNotFound;
+    }
+    if (!npc) {
+        detail = L"GetNearestNPC() trả null. Hãy đứng gần NPC cần dò rồi thử lại.";
+        return ResultCode::NearestNpcNotFound;
+    }
+
+    double x = 0.0, y = 0.0;
+    if (!ReadPosition(npc, x, y)) {
+        detail = L"Đã có nearest NPC class=" + ClassName(npc) +
+                 L" nhưng không đọc được Position/X/Y để đối chiếu npcResID.";
+        return ResultCode::FieldReadFailed;
+    }
+
+    std::wstring name;
+    (void)TextMember(npc, "Name", name);
+    double roleId = 0.0;
+    bool roleIntegral = false;
+    const bool hasRoleId = NumberMember(npc, "RoleID", roleId, roleIntegral);
+
+    gNearestNpcSnapshot.valid = true;
+    gNearestNpcSnapshot.x = x;
+    gNearestNpcSnapshot.y = y;
+    gNearestNpcSnapshot.name = name;
+    if (hasRoleId && roleIntegral) gNearestNpcSnapshot.roleId = static_cast<std::int64_t>(roleId);
+
+    std::wostringstream out;
+    out << L"=== NEAREST NPC ID PROBE — READ ONLY ===\n";
+    std::wstring player;
+    if (Leader(player)) out << player << L"\n";
+    out << L"class=" << ClassName(npc);
+    if (!name.empty()) out << L" Name=\"" << name << L"\"";
+    if (hasRoleId) out << L" RoleID=" << Num(roleId, roleIntegral);
+    out << L" Position=" << FloatingText(x) << L"," << FloatingText(y) << L"\n";
+
+    out << L"\n--- TEXT MEMBERS ---\n";
+    for (const char* member : {"Name", "ResName", "NPCName", "TemplateName", "Type"}) {
+        std::wstring value;
+        if (TextMember(npc, member, value) && !value.empty()) {
+            out << W(member) << L"=\"" << value << L"\"\n";
+        }
+    }
+
+    out << L"\n--- NUMERIC ID MEMBERS (candidate; RoleID thường là instance runtime) ---\n";
+    bool directStableCandidate = false;
+    for (const char* member : {
+             "RoleID", "ID", "NpcID", "NPCID", "NpcId", "NPCId",
+             "ResID", "ResId", "NpcResID", "NPCResID", "NpcResId", "NPCResId",
+             "TemplateID", "TemplateId", "DataID", "DataId", "ConfigID", "ConfigId",
+             "ObjectID", "SceneID"}) {
+        double value = 0.0;
+        bool integral = false;
+        if (!NumberMember(npc, member, value, integral)) continue;
+        out << W(member) << L"=" << Num(value, integral);
+        const std::wstring m = W(member);
+        if (m != L"RoleID" && m != L"ObjectID" && m != L"SceneID" && integral && value >= 1.0 && value <= 100000.0) {
+            out << L"  <-- DIRECT npcResID/NPC_ID CANDIDATE";
+            directStableCandidate = true;
+        }
+        out << L"\n";
+    }
+
+    out << L"\nNEXT: đối chiếu static NPC_ID 1..1003 bằng Game.GetNPCPosition(id).\n"
+        << L"EXACT_HIT/CLOSE_HIT mới là candidate để kiểm tiếp; không dùng Button_-xxxxx hay RoleID runtime làm NPC_ID tĩnh.\n";
+    if (directStableCandidate) {
+        out << L"Có ít nhất một field ID tĩnh khả nghi đọc trực tiếp; vẫn nên so với GetNPCPosition trước khi chốt VERIFIED.\n";
+    }
+    detail = out.str();
+    return ResultCode::Ok;
+}
+
+struct NpcPositionCandidate {
+    std::int32_t npcId = 0;
+    double x = 0.0;
+    double y = 0.0;
+    double distance = 0.0;
+    std::wstring nearestName;
+    std::int64_t nearestRoleId = 0;
+};
+
+ResultCode ScanNpcResIdBatch(std::int64_t startRaw, std::int64_t endRaw, std::wstring& detail) {
+    if (!gNearestNpcSnapshot.valid) {
+        detail = L"Chưa có snapshot nearest NPC. Hãy chạy PROBE_NEAREST_NPC (mục 7) trước.";
+        return ResultCode::FieldReadFailed;
+    }
+
+    const std::int32_t start = static_cast<std::int32_t>(std::max<std::int64_t>(1, startRaw));
+    const std::int32_t end = static_cast<std::int32_t>(std::min<std::int64_t>(1003, endRaw));
+    if (start > end || end - start > 199) {
+        detail = L"Batch range không hợp lệ; chỉ cho tối đa 200 NPC_ID/lần trong 1..1003.";
+        return ResultCode::SafetyRejected;
+    }
+
+    Il2CppClass* game = Class("FGStudio.LuaSystem.API", "LuaSystemAPI_Game");
+    if (!game) {
+        detail = L"Không tìm thấy LuaSystemAPI_Game.";
+        return ResultCode::ClassNotFound;
+    }
+    const MethodInfo* getPos = Method(game, "GetNPCPosition", 1);
+    if (!getPos) {
+        detail = L"Không resolve được Game.GetNPCPosition(npcID).";
+        return ResultCode::MethodNotFound;
+    }
+
+    void* instance = nullptr;
+    Il2CppObject* singleton = nullptr;
+    if (!IsStatic(getPos)) {
+        if (!Singleton(game, singleton)) {
+            detail = L"GetNPCPosition không static nhưng không resolve được Game singleton.";
+            return ResultCode::NullResult;
+        }
+        instance = ManagedThis(singleton);
+    }
+
+    std::vector<NpcPositionCandidate> ranked;
+    int positionsReturned = 0;
+    int invokeFailures = 0;
+
+    for (std::int32_t npcId = start; npcId <= end; ++npcId) {
+        Il2CppObject* posObject = nullptr;
+        std::int32_t arg = npcId;
+        void* args[] = {&arg};
+        if (!Invoke(getPos, instance, args, posObject)) {
+            ++invokeFailures;
+            continue;
+        }
+        if (!posObject) continue;
+
+        double x = 0.0, y = 0.0;
+        if (!ReadPosition(posObject, x, y)) continue;
+        ++positionsReturned;
+
+        const double dx = x - gNearestNpcSnapshot.x;
+        const double dy = y - gNearestNpcSnapshot.y;
+        const double distance = std::sqrt(dx * dx + dy * dy);
+
+        NpcPositionCandidate candidate;
+        candidate.npcId = npcId;
+        candidate.x = x;
+        candidate.y = y;
+        candidate.distance = distance;
+
+        if (distance <= 8.0) {
+            Il2CppObject* filtered = nullptr;
+            if (GetNearestNpcObject(npcId, true, filtered) && filtered) {
+                (void)TextMember(filtered, "Name", candidate.nearestName);
+                double rid = 0.0;
+                bool integral = false;
+                if (NumberMember(filtered, "RoleID", rid, integral) && integral) {
+                    candidate.nearestRoleId = static_cast<std::int64_t>(rid);
+                }
+            }
+        }
+        ranked.push_back(std::move(candidate));
+    }
+
+    std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
+        return a.distance < b.distance;
+    });
+
+    std::wostringstream out;
+    out << L"=== SCAN NPC RESID BATCH " << start << L"-" << end << L" — READ ONLY ===\n"
+        << L"target Name=\"" << gNearestNpcSnapshot.name << L"\""
+        << L" liveRoleID=" << gNearestNpcSnapshot.roleId
+        << L" livePos=" << FloatingText(gNearestNpcSnapshot.x) << L"," << FloatingText(gNearestNpcSnapshot.y) << L"\n"
+        << L"GetNPCPosition non-null/readable=" << positionsReturned
+        << L" invokeFailures=" << invokeFailures << L"\n";
+
+    int exactCount = 0;
+    int closeCount = 0;
+    for (const auto& c : ranked) {
+        if (c.distance > 8.0) break;
+        const wchar_t* kind = c.distance <= 0.50 ? L"EXACT_HIT" : L"CLOSE_HIT";
+        if (c.distance <= 0.50) ++exactCount; else ++closeCount;
+        out << kind << L" NPC_ID/npcResID=" << c.npcId
+            << L" pos=" << FloatingText(c.x) << L"," << FloatingText(c.y)
+            << L" distance=" << FloatingText(c.distance);
+        if (!c.nearestName.empty()) out << L" GetNearestNPC(id).Name=\"" << c.nearestName << L"\"";
+        if (c.nearestRoleId) out << L" GetNearestNPC(id).RoleID=" << c.nearestRoleId;
+        out << L"\n";
+    }
+
+    if (exactCount == 0 && closeCount == 0) {
+        out << L"Không có candidate <=8 đơn vị trong batch.\n";
+    }
+
+    out << L"TOP_NEAREST_IN_BATCH:\n";
+    const std::size_t topCount = std::min<std::size_t>(3, ranked.size());
+    for (std::size_t i = 0; i < topCount; ++i) {
+        const auto& c = ranked[i];
+        out << L"  #" << (i + 1) << L" NPC_ID=" << c.npcId
+            << L" pos=" << FloatingText(c.x) << L"," << FloatingText(c.y)
+            << L" distance=" << FloatingText(c.distance) << L"\n";
     }
     detail = out.str();
     return ResultCode::Ok;
@@ -1166,7 +1441,7 @@ void Process() {
             switch (gShared->command) {
                 case Command::ValidateContext:
                     result = ResultCode::Ok;
-                    detail = L"PASS: đúng window thread. v0.1.7 có chu trình mutation có kiểm soát: callback lựa chọn Xa Truyền rồi callback MessageBox Xác nhận theo semantic UI.";
+                    detail = L"PASS: đúng window thread. v0.1.9 có travel semantic callback + read-only nearest NPC/npcResID probe.";
                     break;
                 case Command::DumpNearbyObjects:
                     result = DumpNearby(detail);
@@ -1179,6 +1454,12 @@ void Process() {
                     break;
                 case Command::ClickMessageBoxConfirm:
                     result = ClickMessageBoxConfirm(detail);
+                    break;
+                case Command::ProbeNearestNpc:
+                    result = ProbeNearestNpc(detail);
+                    break;
+                case Command::ScanNpcResIdBatch:
+                    result = ScanNpcResIdBatch(gShared->arg0, gShared->arg1, detail);
                     break;
                 case Command::ReadPlayerState: {
                     std::wstring player;

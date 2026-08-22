@@ -1,4 +1,4 @@
-# Thần Long NPC / GameDialog Probe v0.1.8
+# Thần Long NPC / GameDialog Probe v0.1.9
 
 Bản test chu trình semantic callback có kiểm soát cho **Xa Truyền Công / Xa Truyền Bình / Xa Truyền Chí / Xa Truyền Tín**.
 
@@ -19,7 +19,7 @@ GameDialog Xa Truyền dùng các `UIButton` có `Tag/selectionID` ổn định:
 
 Tên instance `Button_-xxxxx` là động và **không được dùng làm identity**.
 
-## Mới trong v0.1.8
+## Mới trong v0.1.9
 
 Mục **6 — TEST CHU TRÌNH Xa Truyền** chạy:
 
@@ -75,7 +75,7 @@ Xem `SEMANTIC_UI_CALLBACK_DATA.md` để tái sử dụng cơ chế cho các NPC
 Log: `NpcDialogProbe_output.txt`.
 
 
-## v0.1.8 — Confirm resolver theo UI delta
+## v0.1.9 — Confirm resolver theo UI delta
 
 - Không còn bắt buộc popup xác nhận phải có container tên `MessageBox`.
 - Trước callback điểm đến, Bridge lưu tập UI đang ACTIVE làm baseline.
@@ -83,9 +83,14 @@ Log: `NpcDialogProbe_output.txt`.
 - Matcher chấp nhận cả nhãn chứa `Xác nhận`, `Đồng ý`, `Chấp nhận`, `Confirm`, không chỉ khớp tuyệt đối.
 - Nếu không tìm thấy, log tự dump tối đa 100 control mới để khóa chính xác popup runtime.
 
-## v0.1.8 — nhịp Confirm 500 ms
+## v0.1.9 — nhịp Confirm 500 ms
 
 - Sau callback điểm đến, controller chờ 500 ms trước lần dò/callback Xác nhận đầu tiên.
 - Các lần retry Confirm cũng cách nhau 500 ms.
 - Tối đa 40 lần, tương đương khoảng 20 giây thay vì 8 giây.
 - Bridge/game UI thread vẫn không bị Sleep; delay chỉ nằm ở controller.
+
+
+## v0.1.9 — FIND npcResID / NPC_ID tĩnh
+
+Mục 7 là read-only. Nó lấy `GetNearestNPC()` rồi đọc `Name`, `RoleID`, `Position` và các field/property ID khả nghi (`NpcResID`, `ResID`, `TemplateID`, `NpcID`, `ID`...). Sau đó controller chia batch để đối chiếu `NPC_ID=1..1003` bằng `Game.GetNPCPosition(npcID)` và báo `EXACT_HIT` / `CLOSE_HIT`. Candidate gần sẽ được kiểm thêm bằng `GetNearestNPC(candidateID)` nếu overload runtime có sẵn. Không `ClickNPC`, không `GoTo`, không SendInput ở mục 7.
