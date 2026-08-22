@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstring>
 #include <cmath>
+#include <cwctype>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -941,6 +942,133 @@ ResultCode ClickTravelSelection(std::int64_t selectionId, std::wstring& detail) 
     return ResultCode::Ok;
 }
 
+
+
+std::wstring FoldSemanticLabel(const std::wstring& input) {
+    std::wstring out;
+    out.reserve(input.size());
+    for (wchar_t ch : input) {
+        wchar_t c = static_cast<wchar_t>(towlower(ch));
+        switch (c) {
+            case L'á': case L'à': case L'ả': case L'ã': case L'ạ':
+            case L'ă': case L'ắ': case L'ằ': case L'ẳ': case L'ẵ': case L'ặ':
+            case L'â': case L'ấ': case L'ầ': case L'ẩ': case L'ẫ': case L'ậ': c = L'a'; break;
+            case L'é': case L'è': case L'ẻ': case L'ẽ': case L'ẹ':
+            case L'ê': case L'ế': case L'ề': case L'ể': case L'ễ': case L'ệ': c = L'e'; break;
+            case L'í': case L'ì': case L'ỉ': case L'ĩ': case L'ị': c = L'i'; break;
+            case L'ó': case L'ò': case L'ỏ': case L'õ': case L'ọ':
+            case L'ô': case L'ố': case L'ồ': case L'ổ': case L'ỗ': case L'ộ':
+            case L'ơ': case L'ớ': case L'ờ': case L'ở': case L'ỡ': case L'ợ': c = L'o'; break;
+            case L'ú': case L'ù': case L'ủ': case L'ũ': case L'ụ':
+            case L'ư': case L'ứ': case L'ừ': case L'ử': case L'ữ': case L'ự': c = L'u'; break;
+            case L'ý': case L'ỳ': case L'ỷ': case L'ỹ': case L'ỵ': c = L'y'; break;
+            case L'đ': c = L'd'; break;
+            default: break;
+        }
+        if ((c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9')) out.push_back(c);
+    }
+    return out;
+}
+
+int PositiveConfirmScore(const std::wstring& label) {
+    const std::wstring folded = FoldSemanticLabel(label);
+    if (folded == L"xacnhan") return 100;
+    if (folded == L"dongy" || folded == L"chapnhan") return 95;
+    if (folded == L"confirm") return 90;
+    if (folded == L"ok") return 85;
+    if (folded == L"co" || folded == L"yes") return 70;
+    return 0;
+}
+
+bool IsNegativeConfirmLabel(const std::wstring& label) {
+    const std::wstring folded = FoldSemanticLabel(label);
+    return folded == L"huy" || folded == L"khong" || folded == L"no" ||
+           folded == L"cancel" || folded == L"dong" || folded == L"close" ||
+           folded == L"boqua" || folded == L"quaylai" || folded == L"thoat";
+}
+
+ResultCode ClickMessageBoxConfirm(std::wstring& detail) {
+    std::vector<Il2CppObject*> objects;
+    std::int32_t dictionaryCount = 0;
+    std::uintptr_t capacity = 0;
+    std::wstring why;
+    if (!EnumerateUiObjects(objects, dictionaryCount, capacity, why)) {
+        detail = L"Không enumerate được UIObject.instances: " + why;
+        return ResultCode::EnumerationFailed;
+    }
+
+    bool messageBoxPresent = false;
+    struct Candidate { UiRow row; int score = 0; };
+    std::vector<Candidate> candidates;
+
+    for (Il2CppObject* object : objects) {
+        if (!object || !IsActiveUiObject(object)) continue;
+        UiRow row = ReadUiRow(object);
+        if (row.name == L"MessageBox" || row.path.find(L"MessageBox") != std::wstring::npos) {
+            messageBoxPresent = true;
+        }
+        if (!row.clickable || row.className.find(L"UIButton") == std::wstring::npos) continue;
+        if (row.path.find(L"MessageBox") == std::wstring::npos) continue;
+        if (IsNegativeConfirmLabel(row.text) || IsNegativeConfirmLabel(row.name)) continue;
+
+        double interactable = 1.0;
+        bool integral = true;
+        if (NumberMember(row.object, "Interactable", interactable, integral) && interactable < 0.5) continue;
+
+        const int score = std::max(PositiveConfirmScore(row.text), PositiveConfirmScore(row.name));
+        if (score > 0) candidates.push_back({std::move(row), score});
+    }
+
+    if (!messageBoxPresent) {
+        detail = L"Chưa thấy MessageBox ACTIVE sau callback điểm đến.";
+        return ResultCode::ConfirmNotFound;
+    }
+    if (candidates.empty()) {
+        detail = L"MessageBox đã xuất hiện nhưng chưa tìm thấy UIButton xác nhận dương tính (Xác nhận/Đồng ý/OK/Có).";
+        return ResultCode::ConfirmNotFound;
+    }
+
+    int bestScore = 0;
+    for (const auto& c : candidates) bestScore = std::max(bestScore, c.score);
+    std::vector<UiRow*> best;
+    for (auto& c : candidates) if (c.score == bestScore) best.push_back(&c.row);
+    if (best.size() != 1 || !best.front() || !best.front()->object) {
+        std::wostringstream out;
+        out << L"SAFETY REJECT: MessageBox có " << best.size()
+            << L" UIButton cùng điểm nhận diện xác nhận=" << bestScore << L"; không callback mù.";
+        for (const auto* row : best) {
+            if (!row) continue;
+            out << L"\n- text=\"" << row->text << L"\" name=\"" << row->name << L"\" parents=" << row->path;
+        }
+        detail = out.str();
+        return ResultCode::SafetyRejected;
+    }
+
+    UiRow& target = *best.front();
+    Il2CppClass* klass = gApi.object_get_class(target.object);
+    const MethodInfo* handleClick = Method(klass, "HandleClickEvent", 0);
+    if (!handleClick) {
+        detail = L"UIButton Xác nhận không resolve được HandleClickEvent().";
+        return ResultCode::MethodNotFound;
+    }
+
+    Il2CppObject* ignored = nullptr;
+    if (!Invoke(handleClick, ManagedThis(target.object), nullptr, ignored)) {
+        detail = L"Managed exception khi callback UIButton Xác nhận.";
+        return ResultCode::InvokeException;
+    }
+
+    std::wostringstream out;
+    out << L"CONFIRM CALLBACK ĐÃ GỌI"
+        << L" • text=\"" << target.text << L"\""
+        << L" • score=" << bestScore;
+    if (!target.name.empty()) out << L" • button=" << target.name;
+    if (!target.path.empty()) out << L"\nparents=" << target.path;
+    out << L"\nĐã invoke trực tiếp UIButton.HandleClickEvent() của MessageBox; không tọa độ/TryClick/SendInput.";
+    detail = out.str();
+    return ResultCode::Ok;
+}
+
 bool EnsureShared() {
     if (gShared) return true;
     wchar_t mappingName[96]{};
@@ -979,7 +1107,7 @@ void Process() {
             switch (gShared->command) {
                 case Command::ValidateContext:
                     result = ResultCode::Ok;
-                    detail = L"PASS: đúng window thread. v0.1.5 có 1 command mutation có kiểm soát: callback Xa Truyền chỉ khi người dùng chọn explicit trong menu.";
+                    detail = L"PASS: đúng window thread. v0.1.6 có chu trình mutation có kiểm soát: callback lựa chọn Xa Truyền rồi callback MessageBox Xác nhận theo semantic UI.";
                     break;
                 case Command::DumpNearbyObjects:
                     result = DumpNearby(detail);
@@ -989,6 +1117,9 @@ void Process() {
                     break;
                 case Command::ClickTravelSelection:
                     result = ClickTravelSelection(gShared->arg0, detail);
+                    break;
+                case Command::ClickMessageBoxConfirm:
+                    result = ClickMessageBoxConfirm(detail);
                     break;
                 case Command::ReadPlayerState: {
                     std::wstring player;
