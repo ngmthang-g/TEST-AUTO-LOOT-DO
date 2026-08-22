@@ -94,7 +94,7 @@ const wchar_t* ResultText(ResultCode r) {
         case ResultCode::InvokeException: return L"INVOKE_EXCEPTION";
         case ResultCode::NullResult: return L"NULL_RESULT";
         case ResultCode::EnumerationFailed: return L"ENUMERATION_FAILED";
-        case ResultCode::GameDialogNotOpen: return L"GAMEDIALOG_NOT_OPEN";
+        case ResultCode::GameDialogNotOpen: return L"TRAVEL_UI_NOT_FOUND";
         case ResultCode::FieldReadFailed: return L"FIELD_READ_FAILED";
         default: return L"ERROR";
     }
@@ -200,7 +200,7 @@ public:
                 MemoryBarrier();
                 last_ = shared_->result;
                 text_ = shared_->detail;
-                Log(command, last_, text_);
+                if (print) Log(command, last_, text_);
                 if (print) {
                     std::wcout << L"\n[" << ResultText(last_) << L"]\n"
                                << text_ << L"\n[Đã ghi NpcDialogProbe_output.txt]\n";
@@ -240,19 +240,17 @@ private:
 
 void Menu() {
     std::wcout
-        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.2 ==========\n"
+        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.3 ==========\n"
         << L"CHỈ ĐỌC: không ClickNPC, TryClick, SendInput, AutoPath, gửi selection.\n"
         << L"1. Đọc RoleID / MapID / Pos\n"
         << L"2. DUMP NPC/object live quanh đây\n"
-        << L"3. DUMP GameDialog đang mở (Text + Tag/selectionID)\n"
-        << L"4. CHỜ GameDialog 15 giây — chọn rồi quay sang game tự click NPC\n"
-        << L"5. DUMP cả Nearby + GameDialog\n"
+        << L"3. DUMP UI LIVE (Text + Tag + parent path)\n"
+        << L"4. CHỜ bảng Xa Truyền 15 giây — rồi tự click NPC\n"
+        << L"5. DUMP cả Nearby + UI live\n"
         << L"0. Thoát\n> ";
 }
 
 void EnableNativeUnicodeConsole() {
-    // MSVC wide streams can fail at the first Vietnamese character when stdout
-    // remains in the default text mode. Example: "Thần" becomes only "Th".
     _setmode(_fileno(stdout), _O_U16TEXT);
     _setmode(_fileno(stderr), _O_U16TEXT);
     _setmode(_fileno(stdin), _O_U16TEXT);
@@ -267,7 +265,7 @@ int wmain() {
     EnableNativeUnicodeConsole();
 
     std::wcout
-        << L"Thần Long NPC / GameDialog Probe v0.1.2 — READ ONLY\n"
+        << L"Thần Long NPC / GameDialog Probe v0.1.3 — READ ONLY\n"
         << L"Output: NpcDialogProbe_output.txt\n\n";
 
     auto games = Clients();
@@ -355,7 +353,8 @@ int wmain() {
             for (int i = 0; i < 30; ++i) {
                 if (session.Send(Command::DumpGameDialog, 5000, false) &&
                     session.Last() == ResultCode::Ok) {
-                    std::wcout << L"\n[OK] BẮT ĐƯỢC GAMEDIALOG:\n"
+                    Log(Command::DumpGameDialog, session.Last(), session.Text());
+                    std::wcout << L"\n[OK] BẮT ĐƯỢC UI XA TRUYỀN:\n"
                                << session.Text()
                                << L"\n[Đã ghi NpcDialogProbe_output.txt]\n";
                     got = true;
@@ -363,7 +362,7 @@ int wmain() {
                 }
                 Sleep(500);
             }
-            if (!got) std::wcout << L"Hết 15 giây chưa bắt được GameDialog.\n";
+            if (!got) std::wcout << L"Hết 15 giây chưa thấy nhóm nút truyền tống. Thử mở bảng rồi chọn mục 3.\n";
         } else if (choice == 5) {
             session.Send(Command::DumpNearbyObjects);
             session.Send(Command::DumpGameDialog);
