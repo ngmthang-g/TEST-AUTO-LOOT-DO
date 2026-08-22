@@ -7,7 +7,7 @@
 namespace thanlong_probe {
 
 constexpr std::uint32_t kMagic = 0x504E544C;
-constexpr std::uint32_t kProtocolVersion = 0x00010002;
+constexpr std::uint32_t kProtocolVersion = 0x00010003;
 constexpr UINT kWakeMessage = WM_APP + 0x4D1;
 constexpr wchar_t kMappingPrefix[] = L"Local\\ThanLongNpcDialogProbe_";
 constexpr std::size_t kDetailChars = 32768;

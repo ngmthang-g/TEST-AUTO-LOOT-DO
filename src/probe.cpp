@@ -11,6 +11,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <set>
+#include <sstream>
 
 using namespace thanlong_probe;
 
@@ -238,9 +240,106 @@ private:
     std::wstring text_;
 };
 
+struct UiBlock {
+    std::wstring key;
+    std::wstring body;
+    bool travel = false;
+};
+
+std::vector<std::wstring> SplitLines(const std::wstring& text) {
+    std::vector<std::wstring> lines;
+    std::wistringstream input(text);
+    std::wstring line;
+    while (std::getline(input, line)) {
+        if (!line.empty() && line.back() == L'\r') line.pop_back();
+        lines.push_back(line);
+    }
+    return lines;
+}
+
+std::wstring Between(const std::wstring& text, const std::wstring& left, const std::wstring& right) {
+    const std::size_t begin = text.find(left);
+    if (begin == std::wstring::npos) return L"";
+    const std::size_t valueBegin = begin + left.size();
+    const std::size_t end = text.find(right, valueBegin);
+    if (end == std::wstring::npos) return text.substr(valueBegin);
+    return text.substr(valueBegin, end - valueBegin);
+}
+
+std::vector<UiBlock> ParseUiBlocks(const std::wstring& text) {
+    const auto lines = SplitLines(text);
+    std::vector<UiBlock> blocks;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        const bool travel = lines[i].rfind(L"[TRAVEL ", 0) == 0;
+        const bool ui = lines[i].rfind(L"[UI ", 0) == 0;
+        if (!travel && !ui) continue;
+
+        std::wstring parentLine;
+        if (i + 1 < lines.size() && lines[i + 1].rfind(L"    parents=", 0) == 0) {
+            parentLine = lines[i + 1];
+        }
+
+        const std::wstring className = Between(lines[i], L"class=", L" name=");
+        const std::wstring name = Between(lines[i], L" name=\"", L"\"");
+        std::wstring parents;
+        if (!parentLine.empty()) parents = parentLine.substr(std::wstring(L"    parents=").size());
+
+        std::wstring key = className + L"|" + name + L"|" + parents;
+        if (name.empty()) {
+            const std::size_t textPos = lines[i].find(L" text=");
+            key += L"|" + lines[i].substr(0, textPos == std::wstring::npos ? lines[i].size() : textPos);
+        }
+
+        UiBlock block;
+        block.key = std::move(key);
+        block.body = lines[i];
+        if (!parentLine.empty()) block.body += L"\n" + parentLine;
+        block.travel = travel;
+        blocks.push_back(std::move(block));
+    }
+    return blocks;
+}
+
+std::wstring BuildUiDelta(const std::wstring& baseline,
+                          const std::wstring& current,
+                          std::size_t& newCount,
+                          std::size_t& newTravelCount) {
+    const auto before = ParseUiBlocks(baseline);
+    const auto after = ParseUiBlocks(current);
+    std::set<std::wstring> beforeKeys;
+    for (const auto& block : before) beforeKeys.insert(block.key);
+
+    std::vector<UiBlock> added;
+    for (const auto& block : after) {
+        if (beforeKeys.find(block.key) == beforeKeys.end()) added.push_back(block);
+    }
+
+    newCount = added.size();
+    newTravelCount = 0;
+    for (const auto& block : added) if (block.travel) ++newTravelCount;
+
+    std::wostringstream out;
+    out << L"=== UI DELTA SAU KHI CLICK NPC — READ ONLY ===\n"
+        << L"baselineControls=" << before.size()
+        << L" currentControls=" << after.size()
+        << L" newControls=" << newCount
+        << L" newTravelHits=" << newTravelCount << L"\n\n";
+
+    if (added.empty()) {
+        out << L"(Chưa xuất hiện control cấu trúc mới.)\n";
+        return out.str();
+    }
+
+    std::size_t index = 0;
+    for (const auto& block : added) {
+        out << L"[NEW " << ++index << L"] " << block.body << L"\n";
+    }
+    return out.str();
+}
+
 void Menu() {
     std::wcout
-        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.3 ==========\n"
+        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.4 ==========\n"
         << L"CHỈ ĐỌC: không ClickNPC, TryClick, SendInput, AutoPath, gửi selection.\n"
         << L"1. Đọc RoleID / MapID / Pos\n"
         << L"2. DUMP NPC/object live quanh đây\n"
@@ -265,7 +364,7 @@ int wmain() {
     EnableNativeUnicodeConsole();
 
     std::wcout
-        << L"Thần Long NPC / GameDialog Probe v0.1.3 — READ ONLY\n"
+        << L"Thần Long NPC / GameDialog Probe v0.1.4 — READ ONLY\n"
         << L"Output: NpcDialogProbe_output.txt\n\n";
 
     auto games = Clients();
@@ -348,21 +447,39 @@ int wmain() {
         } else if (choice == 3) {
             session.Send(Command::DumpGameDialog);
         } else if (choice == 4) {
-            std::wcout << L"Đang chờ. Quay sang game và TỰ CLICK Xa Truyền...\n";
+            std::wcout << L"Đang lấy baseline UI trước khi click NPC...\n";
+            if (!session.Send(Command::DumpGameDialog, 5000, false)) {
+                std::wcout << L"Không lấy được baseline UI. Thử lại mục 4.\n";
+                continue;
+            }
+            const std::wstring baseline = session.Text();
+            const auto baselineBlocks = ParseUiBlocks(baseline);
+            std::wcout << L"Baseline=" << baselineBlocks.size()
+                       << L" control. Bây giờ quay sang game và TỰ CLICK Xa Truyền.\n";
+
             bool got = false;
             for (int i = 0; i < 30; ++i) {
-                if (session.Send(Command::DumpGameDialog, 5000, false) &&
-                    session.Last() == ResultCode::Ok) {
-                    Log(Command::DumpGameDialog, session.Last(), session.Text());
-                    std::wcout << L"\n[OK] BẮT ĐƯỢC UI XA TRUYỀN:\n"
-                               << session.Text()
+                Sleep(500);
+                if (!session.Send(Command::DumpGameDialog, 5000, false)) continue;
+
+                std::size_t newCount = 0;
+                std::size_t newTravelCount = 0;
+                const std::wstring delta = BuildUiDelta(
+                    baseline, session.Text(), newCount, newTravelCount);
+
+                if (newCount > 0 && newTravelCount > 0 && session.Last() == ResultCode::Ok) {
+                    Log(Command::DumpGameDialog, ResultCode::Ok, delta);
+                    std::wcout << L"\n[OK] BẮT ĐƯỢC UI MỚI CỦA XA TRUYỀN:\n"
+                               << delta
                                << L"\n[Đã ghi NpcDialogProbe_output.txt]\n";
                     got = true;
                     break;
                 }
-                Sleep(500);
             }
-            if (!got) std::wcout << L"Hết 15 giây chưa thấy nhóm nút truyền tống. Thử mở bảng rồi chọn mục 3.\n";
+            if (!got) {
+                std::wcout << L"Hết 15 giây chưa thấy UI mới có nút truyền tống. "
+                              L"Giữ bảng NPC đang mở rồi chọn mục 3 để dump toàn UI.\n";
+            }
         } else if (choice == 5) {
             session.Send(Command::DumpNearbyObjects);
             session.Send(Command::DumpGameDialog);
