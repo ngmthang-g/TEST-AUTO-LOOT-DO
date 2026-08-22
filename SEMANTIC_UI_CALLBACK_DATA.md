@@ -463,3 +463,8 @@ Fresh Snapshot + Verification
 ## Runtime correction v0.1.7 — không hardcode tên container xác nhận
 
 Runtime test v0.1.6 chứng minh callback lựa chọn map PASS nhưng resolver `MessageBox` có thể không thấy popup xác nhận. Quy tắc mới: tên top-level UI chỉ là tín hiệu phụ. Trước action A phải lưu tập UI ACTIVE; sau action A quét lại và ưu tiên control mới ACTIVE theo semantic `Text/descendant Text + Interactable + HandleClickEvent`, đồng thời loại negative actions. `MessageBox/Dialog/Notice/...` chỉ cộng điểm ngữ cảnh, không còn là điều kiện bắt buộc. Nếu không có candidate duy nhất thì fail-closed và dump UI delta.
+
+
+## Runtime pacing update v0.1.8
+
+Chuỗi Xa Truyền dùng controller-side pacing 500 ms giữa callback destination và semantic confirm scan/callback. Không Sleep trong Bridge/game UI thread. Mục đích là tránh poll quá gấp và cho popup runtime đủ thời gian ổn định.

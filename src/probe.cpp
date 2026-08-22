@@ -399,7 +399,7 @@ void PrintTravelCallbackMenu() {
 
 void Menu() {
     std::wcout
-        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.7 ==========\n"
+        << L"\n========== THẦN LONG NPC / GAMEDIALOG PROBE v0.1.8 ==========\n"
         << L"Mục 1-5 chỉ đọc. Mục 6 chạy chu trình callback Xa Truyền → UI Xác nhận semantic và SẼ tác động game.\n"
         << L"1. Đọc RoleID / MapID / Pos\n"
         << L"2. DUMP NPC/object live quanh đây\n"
@@ -425,7 +425,7 @@ int wmain() {
     EnableNativeUnicodeConsole();
 
     std::wcout
-        << L"Thần Long NPC / GameDialog Probe v0.1.7 — FULL TRAVEL CALLBACK TEST\n"
+        << L"Thần Long NPC / GameDialog Probe v0.1.8 — FULL TRAVEL CALLBACK TEST\n"
         << L"Mục 1-5 read-only; mục 6 callback lựa chọn Xa Truyền rồi resolve/callback UI Xác nhận semantic.\n"
         << L"Output: NpcDialogProbe_output.txt\n\n";
 
@@ -586,7 +586,7 @@ int wmain() {
             std::wcout << L"Đã callback điểm đến. Đang chờ UI xác nhận semantic xuất hiện...\n";
             bool confirmed = false;
             for (int i = 0; i < 40; ++i) {
-                Sleep(200);
+                Sleep(500);
                 if (!session.Send(Command::ClickMessageBoxConfirm, 5000, false)) continue;
                 if (session.Last() == ResultCode::Ok) {
                     Log(Command::ClickMessageBoxConfirm, session.Last(), session.Text());
@@ -604,7 +604,7 @@ int wmain() {
 
             if (!confirmed) {
                 Log(Command::ClickMessageBoxConfirm, session.Last(), session.Text());
-                std::wcout << L"Không callback được Xác nhận trong 8 giây. Resolver v0.1.7 đã dump UI mới bên dưới:\n"
+                std::wcout << L"Không callback được Xác nhận trong 20 giây. Resolver v0.1.8 đã dump UI mới bên dưới:\n"
                            << session.Text() << L"\n[Đã ghi NpcDialogProbe_output.txt]\n";
                 continue;
             }
