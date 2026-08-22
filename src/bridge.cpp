@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+#include <cmath>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -202,6 +203,21 @@ bool CopyString(Il2CppObject* object, std::wstring& out) {
     return true;
 }
 
+std::wstring FloatingText(double value) {
+    if (!std::isfinite(value)) {
+        std::wostringstream out;
+        out << value;
+        return out.str();
+    }
+    const double rounded = std::round(value);
+    if (std::fabs(value - rounded) < 1e-9 && std::fabs(rounded) <= 9007199254740991.0) {
+        return std::to_wstring(static_cast<long long>(rounded));
+    }
+    std::wostringstream out;
+    out << std::setprecision(15) << value;
+    return out.str();
+}
+
 std::wstring ObjText(Il2CppObject* object) {
     if (!object) return L"<null>";
     std::wstring text;
@@ -217,8 +233,11 @@ std::wstring ObjText(Il2CppObject* object) {
         if (std::strcmp(className, "UInt64") == 0) return std::to_wstring(*reinterpret_cast<std::uint64_t*>(raw));
         if (std::strcmp(className, "Int16") == 0) return std::to_wstring(*reinterpret_cast<std::int16_t*>(raw));
         if (std::strcmp(className, "UInt16") == 0) return std::to_wstring(*reinterpret_cast<std::uint16_t*>(raw));
+        if (std::strcmp(className, "SByte") == 0) return std::to_wstring(*reinterpret_cast<std::int8_t*>(raw));
         if (std::strcmp(className, "Byte") == 0) return std::to_wstring(*reinterpret_cast<std::uint8_t*>(raw));
         if (std::strcmp(className, "Boolean") == 0) return *reinterpret_cast<std::uint8_t*>(raw) ? L"1" : L"0";
+        if (std::strcmp(className, "Single") == 0) return FloatingText(*reinterpret_cast<float*>(raw));
+        if (std::strcmp(className, "Double") == 0) return FloatingText(*reinterpret_cast<double*>(raw));
     }
     return className ? L"<" + W(className) + L">" : L"<object>";
 }
@@ -722,7 +741,11 @@ UiRow ReadUiRow(Il2CppObject* object) {
     if (ObjMember(object, "Tag", tagObject) && tagObject) row.tag = ObjText(tagObject);
     (void)TextMember(object, "PointerClickHandler", row.handler);
     row.path = ParentPath(object);
-    row.travel = IsTravelLabel(row.text) || IsTravelLabel(row.name);
+    const bool travelText = IsTravelLabel(row.text) || IsTravelLabel(row.name);
+    const bool obviousNonTravelContext = ContainsAny(
+        row.path,
+        {L"TeamMemberList", L"MiniTeamFrame", L"RoleHeader", L"TeamRole", L"SpiritHeader"});
+    row.travel = travelText && !obviousNonTravelContext;
     return row;
 }
 
